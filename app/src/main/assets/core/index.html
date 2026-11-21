@@ -3,16 +3,76 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#050302">
-<title>Kaivra</title>
+<meta name="theme-color" content="#050409">
+<title>Kaivra · Core</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Rajdhani:wght@500;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap">
 <style>
-  html, body { margin: 0; height: 100%; background: #050302; overflow: hidden; }
-  body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
-  canvas { display: block; position: fixed; inset: 0; width: 100%; height: 100%; }
+  html, body { margin: 0; height: 100%; background-color: #000000; overflow: hidden; }
+  body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  a { color: #FFB13B } a:hover { color: #FFD08A }
+  button { font: inherit }
+  button:focus-visible { outline: 2px solid #FFD08A; outline-offset: -4px }
+  @keyframes kv-wave { 0%, 100% { transform: scaleY(.35) } 50% { transform: scaleY(1) } }
+  .kv-bar { display: block; width: 3px; height: 18px; border-radius: 2px; background: var(--accent); transform-origin: 50% 50%; animation: kv-wave 1.1s ease-in-out infinite }
+  @media (prefers-reduced-motion: reduce) { .kv-bar { animation: none } }
+
+  #app { position: fixed; inset: 0; box-sizing: border-box; overflow: hidden; background: #050409; color: #F4EEE3;
+         font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+         padding: max(26px, env(safe-area-inset-top)) 0 max(22px, env(safe-area-inset-bottom)); }
+  header { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: none; }
+  .brand { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 20px; letter-spacing: 0.42em; line-height: 1; padding-left: 0.42em; color: var(--accent); }
+  .brand-hi { font-family: 'Rajdhani', sans-serif; font-weight: 500; font-size: 14px; color: #A79FBF; }
+  main { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  #core-btn { width: 100%; flex: 1 1 auto; min-height: 0; padding: 0; margin: 0; border: 0; background: none; cursor: grab; display: block;
+              touch-action: none; user-select: none; -webkit-tap-highlight-color: transparent; position: relative; }
+  #cv { width: 100%; height: 100%; display: block; }
+  .state-row { display: flex; align-items: center; gap: 12px; height: 24px; flex: none; }
+  #state { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 15px; letter-spacing: 0.34em; padding-left: 0.34em; color: var(--accent); }
+  #bars { display: none; align-items: center; gap: 3px; height: 20px; }
+  footer { width: min(342px, calc(100% - 40px)); min-height: 76px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; flex: none; }
+  #card { display: none; width: 100%; box-sizing: border-box; padding: 10px 14px; border: 1px solid rgba(255,177,59,0.35); border-radius: 12px; background: rgba(255,177,59,0.06); text-align: left; }
+  #sel-layer { font-family: 'Rajdhani', sans-serif; font-weight: 600; font-size: 11px; letter-spacing: 0.2em; color: #A79FBF; }
+  #sel-name { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 17px; letter-spacing: 0.06em; margin-top: 2px; color: var(--accent); }
+  #sel-desc { font-size: 12.5px; line-height: 1.4; margin-top: 3px; color: #D9D2E6; }
+  #hint { font-size: 13px; line-height: 1.6; color: #A79FBF; }
 </style>
 </head>
 <body>
-<canvas id="core"></canvas>
-<script src="core.js"></script>
+<div id="app">
+  <header>
+    <div class="brand">KAIVRA</div>
+    <div class="brand-hi" lang="hi">कैव्रा</div>
+  </header>
+
+  <main>
+    <button type="button" id="core-btn" aria-pressed="false">
+      <canvas id="cv" width="780" height="1120" aria-hidden="true"></canvas>
+    </button>
+    <div class="state-row">
+      <div id="state">STANDING BY</div>
+      <div id="bars" aria-hidden="true">
+        <span class="kv-bar" style="animation-delay: 0s"></span>
+        <span class="kv-bar" style="animation-delay: 0.15s"></span>
+        <span class="kv-bar" style="animation-delay: 0.3s"></span>
+        <span class="kv-bar" style="animation-delay: 0.45s"></span>
+        <span class="kv-bar" style="animation-delay: 0.3s"></span>
+        <span class="kv-bar" style="animation-delay: 0.15s"></span>
+      </div>
+    </div>
+  </main>
+
+  <footer aria-live="polite">
+    <div id="card">
+      <div id="sel-layer"></div>
+      <div id="sel-name"></div>
+      <div id="sel-desc"></div>
+    </div>
+    <div id="hint"><span id="hintA"></span><br><span id="hintB"></span></div>
+  </footer>
+</div>
+
+<script src="dc-shim.js"></script>
+<script src="kaivra-core.js"></script>
+<script src="main.js"></script>
 </body>
 </html>

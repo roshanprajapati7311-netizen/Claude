@@ -2,24 +2,25 @@
 
 A personal assistant that lives on your phone. It's loyal to one owner and wakes up only when that owner calls it.
 
-**v0.1 — the core.** The home screen is a single amber hologram with no buttons or menus.
+**v0.1 — the core.** The home screen is the Kaivra core from the *Kaivra Home Screen* design: a 3D map of every part of Kaivra.
 
-- **Drag** to spin the core a full 360°.
-- **Pinch** to zoom inside, one layer at a time, down to the kernel.
-- **Tap the core** to wake Kaivra. It lights up, the blades spread out, and it says "Kaivra online." Tap again, or leave it for 12 seconds, and it goes back to standby.
-- **Double-tap empty space** to reset the view.
+- **Tap the core** (the bright centre) to wake Kaivra: it switches to LISTENING, then back to STANDING BY.
+- **Tap a part** to focus on it and see what it does in the card at the bottom. **Tap it again** to open its data vault.
+- Inside a vault, **tap a file block** for its summary tab, and **tap again** (or OPEN FILE) to read it.
+- **Pinch** to zoom: up to 100,000× across the system, and 10,000× inside a part or a file (lines → cells → bytes → bits).
+- **Drag** to rotate, or to move around when zoomed in. **Tap empty space** to step back out.
 
-## The layers (outside → in)
+## What's inside (outside → in)
 
-| # | Layer | Shows now | Will hold |
-|---|-------|-----------|-----------|
-| — | Blade satellites | 3 orbiting rings of blade panels | live status of background jobs |
-| 01 | Shell | planet surface + atmosphere | the interface |
-| 02 | Plugins | geodesic lattice, 12 sockets | installed plugins |
-| 03 | Agents | comets on 4 orbits | the agent team and their jobs |
-| 04 | Memory vaults | 20 vaults | Kaivra's stored data, one vault per area |
-| 05 | Brain | offline half (below) · online half (above) | on-phone brain + online brain, switchable |
-| 06 | Kernel | pulsing core | owner lock and core rules |
+| Belt / layer | Parts |
+|---|---|
+| Belt C · Devices & links | This phone, paired PC, Android TV, online brain link, GitHub builds, cloud GPU training |
+| Belt B · Agents | Researcher, Scriptwriter, Designer, Editor, Learning team |
+| Belt A · Plugins | Calls & SMS, Email, WhatsApp, Music, Reminders, Reel editor, Learn crawler, Code builder |
+| Layer 3 · Guard | Security guard, Permission watch, Encryption, Heartbeat |
+| Layer 2 · Framework | Voice engine, Voice lock, Brain models, Phone control, Master key, Change log & undo |
+| Layer 1 · Data | Memory, Knowledge library, Skills, Training lessons, Soul pack |
+| Layer 0 · Core | Kaivra core: brain router, rulebook, identity |
 
 ## Install on your phone
 
@@ -33,23 +34,23 @@ If an update ever refuses to install, uninstall the old Kaivra first and then in
 ## How it's built
 
 ```
-app/src/main/assets/core/   the hologram — plain HTML + canvas, no libraries, works offline
+app/src/main/assets/core/   the core — kaivra-core.js is the design's code unchanged; main.js runs it full-screen
 app/src/main/java/…/        Android shell: full-screen view, voice (text-to-speech), vibration
 .github/workflows/          builds the APK and publishes it to Releases
 ```
 
 The core talks to Android through `window.KaivraNative` (`speak`, `vibrate`, `version`).
-Android can control the core through `window.Kaivra` (`activate`, `deactivate`, `zoomTo`, `setLayerInfo`).
+The running core is `window.KaivraCore`.
 
 ## Roadmap
 
-- [x] Holographic core home screen, tap to wake, voice + haptics
+- [x] Holographic core home screen: parts, vaults, files, deep zoom, tap to wake
 - [ ] Wake phrase spoken in the owner's own voice (voice lock)
 - [ ] Runs in the background, including while the phone is locked
 - [ ] Basics: calls, texts, email on command
 - [ ] Offline brain (on-phone model) + online brain, switchable
 - [ ] Memory vaults that really store data, browsable inside the hologram
 - [ ] Plugin system: add features on command
-- [ ] Agent team: create agents, assign work, watch them in layer 03
+- [ ] Agent team: create agents, assign work, watch them in Belt B
 - [ ] Learn mode: research a topic online for a project
 - [ ] Reach the owner's other devices after a one-time approval

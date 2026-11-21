@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- loads the core's fonts (Rajdhani, Inter, JetBrains Mono); later: online brain and Learn mode -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- needed on Android 11+ to reach the phone's text-to-speech engine -->
     <queries>
