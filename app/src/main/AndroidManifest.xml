@@ -4,11 +4,20 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- loads the core's fonts (Rajdhani, Inter, JetBrains Mono); later: online brain and Learn mode -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Kaivra's ears: asked for the first time Kaivra listens -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- needed on Android 11+ to reach the phone's text-to-speech engine -->
+    <!-- needed on Android 11+ to reach the phone's voice engine, speech recognition and app list -->
     <queries>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
 
