@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kaivra mark: amber planet-core with an orbit and two blade satellites -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- glow -->
+    <path
+        android:fillColor="#22FF7616"
+        android:pathData="M32,54 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0 z" />
+    <!-- planet -->
+    <path
+        android:fillColor="#33FFAC40"
+        android:strokeColor="#FFFFC680"
+        android:strokeWidth="1.6"
+        android:pathData="M40,54 a14,14 0 1,0 28,0 a14,14 0 1,0 -28,0 z" />
+    <!-- latitude and meridian -->
+    <path
+        android:strokeColor="#AAFFAC40"
+        android:strokeWidth="0.9"
+        android:pathData="M40,54 a14,5 0 1,0 28,0 a14,5 0 1,0 -28,0 z M54,40 a5,14 0 1,0 0,28 a5,14 0 1,0 0,-28 z" />
+    <!-- kernel -->
+    <path
+        android:fillColor="#FFFFF0CD"
+        android:pathData="M51,54 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 z" />
+
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-22">
+        <!-- orbit -->
+        <path
+            android:strokeColor="#CCFFAC40"
+            android:strokeWidth="1"
+            android:pathData="M28,54 a26,9 0 1,0 52,0 a26,9 0 1,0 -52,0 z" />
+        <!-- blade satellites -->
+        <path
+            android:fillColor="#55FF7616"
+            android:strokeColor="#FFFFD282"
+            android:strokeWidth="1.2"
+            android:pathData="M72,61 q8,-1 10,-9 q-6,3 -10,9 z" />
+        <path
+            android:fillColor="#55FF7616"
+            android:strokeColor="#FFFFD282"
+            android:strokeWidth="1.2"
+            android:pathData="M36,47 q-8,1 -10,9 q6,-3 10,-9 z" />
+    </group>
+</vector>
