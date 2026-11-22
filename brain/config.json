@@ -1,0 +1,11 @@
+{
+  "model": {"dim": 288, "layers": 6, "heads": 6, "hidden": 768, "ctx": 256},
+  "batch": 16,
+  "lr": 0.001,
+  "weight_decay": 0.1,
+  "warmup_steps": 300,
+  "ema": 0.999,
+  "seed": 0,
+  "train_minutes": 25,
+  "data_version": 1
+}
