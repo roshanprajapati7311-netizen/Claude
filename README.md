@@ -30,8 +30,18 @@ Can't speak right now? Tap the **keyboard** button and type instead. Typed comma
 | "Mute" / "Unmute" | text-only replies / voice back on |
 | "Permissions" | opens the Access screen |
 | "What can you do?" / "Stop" | lists its skills / "Standing by." |
+| Anything else ("What is a black hole?", "Help me write a poem") | answered by the online brain |
 
 Listening uses the phone's speech recognition (the Google app), which may need internet unless the offline English (India) pack is installed. For better voices: Settings → Text-to-speech → Speech Services by Google → install voice data → English (India).
+
+## Online brain
+
+Anything that isn't a built-in command goes to Kaivra's online brain, so it can answer questions, explain things and help with work, and it remembers the last few exchanges of the conversation.
+
+1. Get a free key at [Google AI Studio](https://aistudio.google.com/apikey) (sign in → **Create API key** → copy).
+2. In Kaivra: shield button → **Online brain** → paste the key → **SAVE**. Or say "connect brain".
+
+The key is stored only on the phone. Free Gemini keys have rate limits, and Google may use free-tier conversations to improve its products. A Claude key (starting `sk-ant-`, paid) also works. Next step on the roadmap: an offline brain that runs on the phone itself.
 
 ## Access
 
@@ -65,11 +75,11 @@ If an update ever refuses to install, uninstall the old Kaivra first and then in
 
 ```
 app/src/main/assets/core/   the core — kaivra-core.js is the design's code unchanged; main.js runs it full-screen
-app/src/main/java/…/        Android shell: full-screen view, voice, listening, device access, phone control service, opening apps
+app/src/main/java/…/        Android shell: full-screen view, voice, listening, device access, phone control service, online brain (Brain.kt)
 .github/workflows/          builds the APK and publishes it to Releases
 ```
 
-The core talks to Android through `window.KaivraNative` (`say`, `listen`, `stop`, `nextVoice`, `accessStatus`, `requestAccess`, `call`, `text`, `control`, `torch`, `volume`, `vibrate`, `battery`, `openApp`, `version`); Android answers through `window.KaivraVoice.onEvent(type, text)`.
+The core talks to Android through `window.KaivraNative` (`say`, `listen`, `stop`, `nextVoice`, `accessStatus`, `requestAccess`, `call`, `text`, `control`, `torch`, `volume`, `vibrate`, `battery`, `openApp`, `setBrainKey`, `brainStatus`, `ask`, `openUrl`, `version`); Android answers through `window.KaivraVoice.onEvent(type, text)`.
 The running core is `window.KaivraCore`.
 
 ## Roadmap
@@ -80,7 +90,8 @@ The running core is `window.KaivraCore`.
 - [ ] Wake phrase spoken in the owner's own voice (voice lock)
 - [ ] Runs in the background, including while the phone is locked
 - [ ] Basics: email, WhatsApp, reminders on command
-- [ ] Offline brain (on-phone model) + online brain, switchable
+- [x] Online brain (Gemini free key, or Claude) with conversation memory
+- [ ] Offline brain (on-phone model), switchable with the online brain
 - [ ] Memory vaults that really store data, browsable inside the hologram
 - [ ] Plugin system: add features on command
 - [ ] Agent team: create agents, assign work, watch them in Belt B

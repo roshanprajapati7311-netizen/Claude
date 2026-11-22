@@ -1,6 +1,6 @@
 /* Mounts the Kaivra core full-screen and gives it a voice: it speaks, listens, reads what you type and replies.
    Native side (Android): window.KaivraNative.* (say, listen, stop, nextVoice, accessStatus, requestAccess,
-   call, text, control, torch, volume, vibrate, battery, openApp, version).
+   call, text, control, torch, volume, vibrate, battery, openApp, version, setBrainKey, brainStatus, ask, openUrl).
    Native events arrive at window.KaivraVoice.onEvent(type, text). */
 (function () {
   'use strict';
@@ -20,7 +20,7 @@
   // ---------- conversation state ----------
   // mode: idle | speaking | listening | thinking
   const voice = { mode: 'idle', heard: '', partial: '', reply: '', listenNext: false, muted: store.get('muted', '0') === '1', typed: false };
-  let nameSay = store.get('nameSay', 'Kai-vraa'); // how the voice pronounces "Kaivra"
+  let nameSay = store.get('nameSay', 'Kye vrah'); // how the voice pronounces "Kaivra"
   let safety = null;
   let laterSleep = null; // a pending "go to standby after speaking"
   const sleepLater = (ms) => { if (laterSleep) clearTimeout(laterSleep); laterSleep = setTimeout(() => { laterSleep = null; sleep(false, true); }, ms); };
@@ -74,7 +74,7 @@
     const ms = typebar.classList.contains('open') ? 120000 : native ? 30000 : 12000;
     safety = setTimeout(() => { if (comp._activeT) sleep(false); }, ms);
   }
-  const speakable = (text) => String(text).replace(/kaivra/gi, nameSay);
+  const speakable = (text) => String(text).replace(/kaivra/gi, nameSay).replace(/\*\*|__|[*#`>~]/g, '');
   function say(text, listenAfter) {
     voice.reply = text;
     voice.listenNext = !!listenAfter;
@@ -178,13 +178,18 @@
     });
     const allOn = ACCESS.every(([k]) => k === 'control' || access[k]);
     $('acc-all').textContent = allOn ? (access.control ? 'ALL SET' : 'TURN ON PHONE CONTROL') : 'ALLOW ALL';
+    const prov = brainProvider();
+    $('brain-status').innerHTML = prov
+      ? 'Connected · <b>' + (prov === 'claude' ? 'Claude' : 'Google Gemini') + '</b>. Kaivra can answer any question. Paste a new key to replace it, or save an empty box to disconnect.'
+      : 'Not connected. With a free key, Kaivra can answer any question, explain things and help with your work.';
   }
   function requestAccess(key) {
     if (native && native.requestAccess) { try { native.requestAccess(key); } catch (e) {} }
   }
-  function openAccess(open) {
+  function openAccess(open, focus) {
     if (open) { readAccess(); renderAccess(); }
     accessPanel.classList.toggle('open', open);
+    if (open && focus === 'brain') setTimeout(() => { $('brain-sec').scrollIntoView({ block: 'start' }); $('brain-key').focus(); }, 60);
   }
   $('access-btn').addEventListener('click', () => openAccess(true));
   $('acc-close').addEventListener('click', () => openAccess(false));
@@ -196,6 +201,18 @@
     else openAccess(false);
   });
   accessPanel.addEventListener('click', (e) => { if (e.target === accessPanel) openAccess(false); });
+  $('brain-get').addEventListener('click', (e) => { e.preventDefault(); try { native.openUrl('https://aistudio.google.com/apikey'); } catch (err) { window.open('https://aistudio.google.com/apikey', '_blank'); } });
+  $('brain-save').addEventListener('click', () => {
+    const k = $('brain-key').value.trim();
+    let prov = '';
+    try { if (native && native.setBrainKey) prov = native.setBrainKey(k); } catch (e) {}
+    $('brain-key').value = '';
+    $('brain-key').blur();
+    renderAccess();
+    awake(true);
+    voice.heard = '';
+    say(prov ? 'My brain is connected. Ask me anything.' : 'My online brain is disconnected.', false);
+  });
 
   // ---------- the parts Kaivra can show ----------
   const EXTRA = {
@@ -208,7 +225,7 @@
     d_phone: ['this phone', 'phone'], d_pc: ['pc', 'computer', 'paired pc'], d_tv: ['tv', 'android tv'],
     d_cloud: ['online brain', 'cloud'], d_github: ['github', 'github builds'], d_colab: ['gpu', 'training', 'cloud gpu']
   };
-  function findPart(target) {
+  function findPart(target, exactOnly) {
     const cat = comp._catalog();
     const q = target.replace(/\b(the|my|your|part|layer|vault|agent)\b/g, ' ').replace(/\s+/g, ' ').trim();
     if (!q) return null;
@@ -216,7 +233,7 @@
     Object.keys(cat).forEach((c) => {
       const names = [cat[c][1].toLowerCase(), cat[c][1].toLowerCase().replace(/^agent · /, ''), c.replace(/^[pad]_/, '').replace(/_/g, ' ')].concat(EXTRA[c] || []);
       names.forEach((n) => {
-        const s = q === n ? 3 : (n.length >= 4 && q.includes(n)) ? 2 : (q.length >= 4 && n.includes(q)) ? 1 : 0;
+        const s = q === n ? 3 : exactOnly ? 0 : (n.length >= 4 && q.includes(n)) ? 2 : (q.length >= 4 && n.includes(q)) ? 1 : 0;
         if (s > bestScore || (s > 0 && s === bestScore && n.length > bestLen)) { bestScore = s; bestLen = n.length; best = c; }
       });
     });
@@ -242,11 +259,69 @@
     return true;
   }
 
+  // ---------- the online brain (Gemini or Claude, through Android) ----------
+  const brain = { id: 0, waiting: 0, typed: false, history: [] };
+  function brainProvider() { try { return native && native.brainStatus ? native.brainStatus() : ''; } catch (e) { return ''; } }
+  function systemPrompt() {
+    const d = new Date();
+    return [
+      'You are Kaivra, a personal AI assistant that lives on your owner\'s Android phone as a holographic core. Your owner built you, and you are loyal only to them.',
+      'Be warm, confident and direct, like a capable assistant inspired by Jarvis but with your own character.',
+      'Your replies are spoken aloud by a text-to-speech voice, so answer in one to three short sentences unless the owner asks for detail or a longer piece, and then keep it as short as the task allows.',
+      'Use plain sentences only: no markdown, bullet lists, emojis, tables or code blocks.',
+      'Reply in the language the owner uses: English, Hindi or Bengali; Hinglish is fine.',
+      'The app handles these commands itself, so if the owner asks for one, tell them the exact words to say: "what time is it", "battery", "open" plus an app name, "call" plus a name, "text" plus a name and "saying" plus the message, "go home", "open notifications", "lock the phone", "take a screenshot", "torch on" or "torch off", "volume up" or "volume down", "show me" plus a part of your core, "change voice", "mute".',
+      'You cannot yet set reminders, read messages, see the screen or browse the web; say so plainly instead of pretending.',
+      'Current date and time: ' + d.toDateString() + ', ' + d.toLocaleTimeString() + '.'
+    ].join(' ');
+  }
+  function askBrain(text, typed) {
+    const answer = (t) => say(t, !typed);
+    if (!brainProvider()) {
+      openAccess(true, 'brain');
+      answer('My online brain is not connected yet, so I only know my built-in commands. Paste a free Gemini key in the brain box, and I will be able to answer anything.');
+      return;
+    }
+    brain.history.push({ role: 'user', text: text });
+    while (brain.history.length > 12 || (brain.history.length && brain.history[0].role !== 'user')) brain.history.shift();
+    brain.id += 1; brain.waiting = brain.id; brain.typed = !!typed;
+    voice.mode = 'thinking'; voice.reply = '';
+    keepAlive(); comp._paint();
+    try { native.ask(JSON.stringify({ id: brain.id, system: systemPrompt(), history: brain.history })); }
+    catch (e) { brain.waiting = 0; brain.history.pop(); answer('I could not reach my online brain.'); }
+  }
+  const BRAIN_ERRORS = {
+    nokey: 'My online brain is not connected. Add a key in the Access screen.',
+    badkey: 'That brain key did not work. Check it in the Access screen.',
+    limit: 'I have used up the free limit for now. Try again in a minute.',
+    credit: 'The Claude account for my brain has no credit left.',
+    network: 'I could not reach my online brain. Check the internet connection.',
+    empty: 'My brain had nothing to say to that. Try asking another way.',
+    model: 'My online brain is not available right now. Try again a little later.',
+    server: 'My online brain had a problem. Try again in a moment.'
+  };
+  function onBrain(json) {
+    let r = {};
+    try { r = JSON.parse(json); } catch (e) {}
+    if (!brain.waiting || (r.id && r.id !== brain.waiting)) return; // an older question, or a command came in meanwhile
+    brain.waiting = 0;
+    const answer = (t) => say(t, !brain.typed);
+    if (r.ok && r.text) {
+      const text = String(r.text).replace(/\*\*|__|[*#`>~]/g, '').replace(/^\s*[-•]\s+/gm, '').trim();
+      brain.history.push({ role: 'assistant', text: text });
+      answer(text);
+      return;
+    }
+    if (brain.history.length && brain.history[brain.history.length - 1].role === 'user') brain.history.pop();
+    if (r.error === 'nokey' || r.error === 'badkey') openAccess(true, 'brain');
+    answer(BRAIN_ERRORS[r.error] || BRAIN_ERRORS.server);
+  }
+
   // ---------- Kaivra's built-in brain (offline, simple commands) ----------
   const pad = (n) => String(n).padStart(2, '0');
   const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const HELP = 'I can tell you the time, the date and the battery, open any app, call or text your contacts, go home, open notifications, lock the phone, take a screenshot, turn the torch on or off, change the volume, and show any part of my core. Say change voice to hear another voice, or stop when you are done.';
+  const HELP = 'I can tell you the time, the date and the battery, open any app, call or text your contacts, go home, open notifications, lock the phone, take a screenshot, turn the torch on or off, change the volume, and show any part of my core. With my online brain connected, you can also ask me anything. Say change voice to hear another voice, or stop when you are done.';
   const CONTROL = {
     home: ['Going home.', true], back: ['Going back.', false], recents: ['Here are your recent apps.', true],
     notifications: ['Here are your notifications.', true], quicksettings: ['Here are your quick settings.', true],
@@ -255,6 +330,7 @@
 
   function handle(raw, typed) {
     if (laterSleep) { clearTimeout(laterSleep); laterSleep = null; }
+    brain.waiting = 0;
     const rawN = String(raw || '').replace(/\s+/g, ' ').trim();
     const t = rawN.toLowerCase().replace(/[.,!?]/g, ' ').replace(/\s+/g, ' ').trim();
     voice.heard = rawN; voice.partial = ''; voice.typed = !!typed;
@@ -265,8 +341,8 @@
     const word = (re) => re.test(t);
 
     // my voice: mute, unmute, change it, say my name
-    if (word(/^(mute|be quiet|quiet|silent|silence|stop talking|no voice|text only)\b/)) { setMuted(true); voice.reply = 'Muted. I will reply in text only.'; voice.mode = 'idle'; keepAlive(); comp._paint(); return; }
-    if (word(/^(unmute|speak|talk to me|voice on|speak again)\b/)) { setMuted(false); answer('I am speaking again.'); return; }
+    if (word(/^(mute|mute yourself|be quiet|quiet|silent|silence|stop talking|no voice|text only)( please)?$/)) { setMuted(true); voice.reply = 'Muted. I will reply in text only.'; voice.mode = 'idle'; keepAlive(); comp._paint(); return; }
+    if (word(/^(unmute|unmute yourself|voice on|speak again|talk to me|you can speak)( please)?$/)) { setMuted(false); answer('I am speaking again.'); return; }
     if (has('change voice', 'change your voice', 'next voice', 'another voice', 'different voice', 'new voice', 'other voice')) {
       let label = '';
       try { if (native && native.nextVoice) label = native.nextVoice(); } catch (e) {}
@@ -289,40 +365,44 @@
       sleep(true);
       return;
     }
-    if (word(/\b(permissions?|access|setup|set up)\b/) && !has('permission watch')) {
+    if (word(/^(connect|add|set up|setup)( (your|the|my|online))* brain\b/) || word(/^brain (key|setup|settings)$/)) {
+      openAccess(true, 'brain');
+      answer(brainProvider() ? 'My brain is already connected. You can paste a new key to replace it.' : 'Paste a free Gemini key in the brain box, then tap save.');
+      return;
+    }
+    if (word(/^(open |show )?(the |my )?(permissions?|access|setup|set up)( screen| settings)?$/)) {
       openAccess(true);
       answer('Here is what I can reach on this phone. Tap anything that is not on yet.');
       return;
     }
-    if (has('what time', 'the time', 'time is it') || t === 'time') {
+    if (word(/^(what('s| is) the time|what time is it|tell me the time|current time|time)( now| please)?$/)) {
       const d = new Date(), h = d.getHours() % 12 || 12;
       answer('It is ' + h + ':' + pad(d.getMinutes()) + (d.getHours() < 12 ? ' AM.' : ' PM.')); return;
     }
-    if (word(/\b(date|what day|which day|today)\b/)) {
+    if (word(/^(what('s| is) (the |today's )?(date|day)( today)?|today's date|what day is (it|today)|which day is (it|today)|date)( please)?$/)) {
       const d = new Date();
       answer('Today is ' + DAYS[d.getDay()] + ', ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear() + '.'); return;
     }
-    if (word(/\b(battery|charge|charging)\b/)) {
+    if (word(/^(battery|battery level|battery status|how much (battery|charge)( is left| do i have)?|what('s| is) (the |my )?(battery|charge)( level| percentage)?)( please)?$/)) {
       let b = -1;
       try { if (native && native.battery) b = native.battery(); } catch (e) {}
       answer(b >= 0 ? 'Battery is at ' + b + ' percent.' : 'I cannot read the battery here.'); return;
     }
-    if (has('your name', 'who are you', 'what are you')) { answer('I am Kaivra, your personal assistant. I live on this phone and I answer only to you.'); return; }
-    if (has('who made you', 'who created you', 'who built you')) { answer('You did. I am built from your own design, and my code lives on your GitHub.'); return; }
-    if (has('what can you do') || word(/\bhelp\b/)) { answer(HELP); return; }
-    if (has('how are you')) { answer('All systems running. Ready when you are.'); return; }
-    if (has('thank')) { answer('You are welcome.'); return; }
-    if (/^(hi|hello|hey|namaste|good morning|good evening|good night)\b/.test(t)) { answer(typed ? 'Hello. Type what you need.' : 'Hello. I am listening.'); return; }
+    if (word(/^(what('s| is) your name|who are you|what are you)$/)) { answer('I am Kaivra, your personal assistant. I live on this phone and I answer only to you.'); return; }
+    if (word(/^who (made|created|built) you$/)) { answer('You did. I am built from your own design, and my code lives on your GitHub.'); return; }
+    if (word(/^(what can you do( for me)?|help|commands|what are your commands)$/)) { answer(HELP); return; }
+    if (word(/^(thanks|thank you|thank you so much|thanks a lot)( kaivra)?$/)) { answer('You are welcome.'); return; }
+    if (word(/^(hi|hello|hey|namaste|good morning|good evening|good night)( kaivra)?$/)) { answer(typed ? 'Hello. Type what you need.' : 'Hello. I am listening.'); return; }
 
     // phone control (needs Phone control turned on)
     let ctl = null;
-    if (word(/\b(go (to )?home|home screen)\b/)) ctl = 'home';
-    else if (word(/\b(recent apps|recents|app switcher)\b/)) ctl = 'recents';
-    else if (word(/\bquick settings\b/)) ctl = 'quicksettings';
-    else if (word(/\b(notifications?|notification panel)\b/) && (word(/\b(open|show|pull|check|see)\b/) || t === 'notifications')) ctl = 'notifications';
-    else if (word(/\block (the |my )?(phone|screen|device)\b/) || t === 'lock') ctl = 'lock';
-    else if (word(/\b(screenshot|screen shot)\b/)) ctl = 'screenshot';
-    else if (word(/\bpower (menu|options)\b/)) ctl = 'power';
+    if (word(/^(go (to )?(the )?home( screen)?|home( screen)?)$/)) ctl = 'home';
+    else if (word(/^((show|open) )?(me )?(the |my )?(recent apps|recents|app switcher)$/)) ctl = 'recents';
+    else if (word(/^((show|open) )?(me )?(the )?quick settings$/)) ctl = 'quicksettings';
+    else if (word(/^((open|show|pull down|check|see) )?(me )?(the |my )?notifications?( panel)?$/)) ctl = 'notifications';
+    else if (word(/^lock( the| my)? (phone|screen|device)$|^lock$/)) ctl = 'lock';
+    else if (word(/^((take|capture) )?(a )?(screenshot|screen shot)$/)) ctl = 'screenshot';
+    else if (word(/^((open|show) )?(the )?power (menu|options)$/)) ctl = 'power';
     else if (word(/^(press back|back button)$/)) ctl = 'back';
     if (ctl) {
       let ok = false;
@@ -332,14 +412,14 @@
       answer('I need Phone control for that. Turn on Kaivra phone control, then ask me again.');
       return;
     }
-    if (word(/\b(torch|flashlight|flash light)\b/)) {
+    if (word(/^((turn|switch) (on|off) )?(the )?(torch|flashlight|flash light)( on| off)?$|^(turn|switch) (the )?(torch|flashlight|flash light) (on|off)$/)) {
       const on = !word(/\boff\b/);
       let ok = false;
       try { ok = !!(native && native.torch && native.torch(on)); } catch (e) {}
       answer(ok ? (on ? 'Torch on.' : 'Torch off.') : 'I could not reach the torch.'); return;
     }
-    if (word(/\b(volume up|louder|increase (the )?volume|raise (the )?volume)\b/)) { try { native.volume(1); native.volume(1); } catch (e) {} answer('Volume up.'); return; }
-    if (word(/\b(volume down|quieter|softer|decrease (the )?volume|lower (the )?volume)\b/)) { try { native.volume(-1); native.volume(-1); } catch (e) {} answer('Volume down.'); return; }
+    if (word(/^(volume up|louder|increase (the )?volume|raise (the )?volume|turn (the )?volume up|turn it up)$/)) { try { native.volume(1); native.volume(1); } catch (e) {} answer('Volume up.'); return; }
+    if (word(/^(volume down|quieter|softer|decrease (the )?volume|lower (the )?volume|turn (the )?volume down|turn it down)$/)) { try { native.volume(-1); native.volume(-1); } catch (e) {} answer('Volume down.'); return; }
 
     // calls and messages (need Contacts; Phone calls to dial directly)
     const cm = rawN.match(/^(?:please\s+|kaivra\s+)?(?:call|dial|ring)\s+(.+?)\s*[.!?]?$/i);
@@ -362,7 +442,7 @@
       answer('I cannot send messages here.'); return;
     }
 
-    if (has('zoom out', 'reset', 'go back', 'full view', 'close it', 'close the')) { resetView(); answer('Back to the full view.'); return; }
+    if (word(/^(zoom out|reset( the)?( view)?|go back|full view|close it|close (the )?(vault|file|part))$/)) { resetView(); answer('Back to the full view.'); return; }
 
     const m = t.match(/^(?:please\s+|can you\s+|kaivra\s+)?(open|launch|start|run|show me|show|go to|zoom into|zoom in on|zoom in to|take me to)\s+(.+)$/);
     if (m) {
@@ -380,12 +460,13 @@
       }
       const c = findPart(target);
       if (c && showPart(c, false)) { answer('Here is ' + cat[c][1] + '. ' + cat[c][2]); return; }
-      answer('I could not find a part called ' + target + '.'); return;
+      askBrain(rawN, typed); return;
     }
-    const c = findPart(t);
-    if (c && has('show', 'where', 'what is', 'tell me about')) { showPart(c, false); answer(comp._catalog()[c][1] + '. ' + comp._catalog()[c][2]); return; }
+    const pm = t.match(/^(?:what is|what's|tell me about|where is)\s+(?:the |my |your )?(.+)$/);
+    const pc = pm ? findPart(pm[1], true) : null;
+    if (pc) { showPart(pc, false); answer(comp._catalog()[pc][1] + '. ' + comp._catalog()[pc][2]); return; }
 
-    answer('I cannot answer that yet, because my brain is not connected. Ask me what I can do to hear my commands.');
+    askBrain(rawN, typed);
   }
 
   // ---------- events from Android ----------
@@ -393,6 +474,7 @@
     onEvent(type, text) {
       if (type === 'access') { readAccess(text); if (accessPanel.classList.contains('open')) renderAccess(); return; }
       if (!comp._activeT && type !== 'spoken') return;
+      if (type === 'brain') { onBrain(text); return; }
       keepAlive();
       if (type === 'speaking') voice.mode = 'speaking';
       else if (type === 'spoken') { if (voice.mode === 'speaking') voice.mode = comp._activeT && voice.listenNext ? 'listening' : 'idle'; }

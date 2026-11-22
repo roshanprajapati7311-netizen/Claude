@@ -45,7 +45,7 @@ import java.util.Locale
 /**
  * Kaivra — the home screen is the holographic core (assets/core).
  * This native layer gives the core its voice (text-to-speech), its ears (speech recognition),
- * touch feedback, device access (contacts, calls, phone control) and the ability to open apps.
+ * touch feedback, device access (contacts, calls, phone control), the online brain (Brain.kt) and opening apps.
  */
 class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
@@ -505,6 +505,47 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
         @JavascriptInterface
         fun version(): String = BuildConfig.VERSION_NAME
+
+        /** Saves the online brain key on this phone only; returns "gemini", "claude" or "" when removed. */
+        @JavascriptInterface
+        fun setBrainKey(key: String): String {
+            val k = key.trim()
+            prefs.edit().putString("brainKey", k).apply()
+            return brainProvider(k)
+        }
+
+        @JavascriptInterface
+        fun brainStatus(): String = brainProvider(prefs.getString("brainKey", "") ?: "")
+
+        /** Asks the online brain in the background; the answer arrives as a "brain" event. */
+        @JavascriptInterface
+        fun ask(payload: String) {
+            val key = prefs.getString("brainKey", "") ?: ""
+            Thread {
+                val result = try {
+                    val req = JSONObject(payload)
+                    req.put("key", key)
+                    Brain.ask(req)
+                } catch (e: Exception) {
+                    JSONObject().put("ok", false).put("error", "network").toString()
+                }
+                sendToPage("brain", result)
+            }.start()
+        }
+
+        @JavascriptInterface
+        fun openUrl(url: String) {
+            if (!url.startsWith("https://")) return
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            mainHandler.post { startSafely(intent) }
+        }
+    }
+
+    private fun brainProvider(key: String): String = when {
+        key.isEmpty() -> ""
+        key.startsWith("sk-ant-") -> "claude"
+        else -> "gemini"
     }
 
     private fun startSafely(intent: Intent) {
