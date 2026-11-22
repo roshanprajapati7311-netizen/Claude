@@ -1,0 +1,26 @@
+Build failed: 2026-11-22T23:59:51.129559366Z
+
+What went wrong:
+LocationAwareException: Build file '/home/runner/work/Claude/Claude/app/build.gradle.kts' line: 64
+Script compilation errors:
+
+  Line 64:             java.net.URI("https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict").toURL().openStream().use { input ->
+                            ^ Unresolved reference: net
+
+  Line 64:             java.net.URI("https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict").toURL().openStream().use { input ->
+                                                                                                                                          ^ Cannot infer a type for this parameter. Please specify it explicitly.
+
+2 errors
+  ScriptCompilationException: Script compilation errors:
+
+  Line 64:             java.net.URI("https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict").toURL().openStream().use { input ->
+                            ^ Unresolved reference: net
+
+  Line 64:             java.net.URI("https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict").toURL().openStream().use { input ->
+                                                                                                                                          ^ Cannot infer a type for this parameter. Please specify it explicitly.
+
+2 errors
+
+Compiler and task messages:
+
+Last task output:
