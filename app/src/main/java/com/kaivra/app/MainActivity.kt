@@ -11,7 +11,10 @@ import android.content.pm.ResolveInfo
 import android.graphics.Color
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.media.AudioAttributes
+import android.media.AudioFormat
 import android.media.AudioManager
+import android.media.AudioTrack
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
@@ -23,12 +26,6 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.ContactsContract
 import android.provider.Settings
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
-import android.speech.tts.Voice
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
@@ -39,30 +36,52 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import org.json.JSONArray
 import org.json.JSONObject
-import java.util.Locale
+import org.vosk.Model
+import org.vosk.Recognizer
+import org.vosk.android.RecognitionListener
+import org.vosk.android.SpeechService
+import java.io.File
+import java.util.Random
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Kaivra — the home screen is the holographic core (assets/core).
- * This native layer gives the core its voice (text-to-speech), its ears (speech recognition),
- * touch feedback, device access (contacts, calls, phone control), the online brain (Brain.kt) and opening apps.
+ * Everything Kaivra thinks, says and hears is its own and runs on the phone:
+ *  - voice: KaivraVoice (own speech synthesizer, written from scratch)
+ *  - brain: KaivraBrain (own neural network, trained from scratch every night on GitHub) + KaivraLibrary (own knowledge library)
+ *  - hearing: the open-source Vosk engine (offline)
+ * Brain, library and hearing are downloaded once from this project's own GitHub release (Packs.kt).
  */
-class MainActivity : Activity(), TextToSpeech.OnInitListener {
+class MainActivity : Activity() {
 
     private lateinit var webView: WebView
     private lateinit var root: FrameLayout
     private val mainHandler = Handler(Looper.getMainLooper())
     private val prefs by lazy { getSharedPreferences("kaivra", Context.MODE_PRIVATE) }
 
-    private var tts: TextToSpeech? = null
-    private var ttsReady = false
-    private var pendingSpeech: Pair<String, Boolean>? = null
-    private var speechCount = 0
-    private var listenAfterId: String? = null
-    private var voices: List<Voice> = emptyList()
-    private var voiceIndex = 0
+    // voice
+    private val voice = KaivraVoice()
+    private val speechExec = Executors.newSingleThreadExecutor()
+    private val speechToken = AtomicInteger(0)
+    @Volatile private var currentTrack: AudioTrack? = null
 
-    private var recognizer: SpeechRecognizer? = null
+    // hearing
+    private var hearingModel: Model? = null
+    private var hearingLoading = false
+    private var speechService: SpeechService? = null
+    private var recognizer: Recognizer? = null
+    private var listenWhenReady = false
+
+    // brain
+    private val brainExec = Executors.newSingleThreadExecutor()
+    @Volatile private var brain: KaivraBrain? = null
+    @Volatile private var library: KaivraLibrary? = null
+    private val rng = Random()
+
+    private lateinit var packs: Packs
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -93,9 +112,18 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             insets
         }
         setContentView(root)
-
         enterImmersive()
-        tts = TextToSpeech(this, this)
+
+        voice.setVoice(prefs.getInt("ownVoice", 0))
+        packs = Packs(this) { type, json -> sendToPage(type, json) }
+        Thread {
+            try {
+                assets.open("voice/cmudict.dict").use { voice.loadDictionary(it) }
+            } catch (e: Exception) {
+                // no dictionary in this build: the voice uses its own spelling rules
+            }
+        }.start()
+        loadBrain()
     }
 
     @Suppress("DEPRECATION")
@@ -103,148 +131,191 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) insets.getInsets(WindowInsets.Type.ime()).bottom
         else insets.systemWindowInsetBottom
 
-    // ---------- voice (text-to-speech) ----------
-
-    override fun onInit(status: Int) {
-        if (status != TextToSpeech.SUCCESS) {
-            sendToPage("error", "tts")
-            return
-        }
-        val engine = tts ?: return
-        voices = rankVoices(engine)
-        val saved = prefs.getString("voice", null)
-        val idx = voices.indexOfFirst { it.name == saved }
-        voiceIndex = if (idx >= 0) idx else 0
-        applyVoice(engine)
-        engine.setPitch(1.0f)
-        engine.setSpeechRate(0.95f)
-        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {}
-            override fun onDone(utteranceId: String?) {
-                mainHandler.post { afterSpeech(utteranceId) }
-            }
-            @Deprecated("Deprecated in Java")
-            override fun onError(utteranceId: String?) {
-                mainHandler.post { afterSpeech(utteranceId) }
-            }
-        })
-        ttsReady = true
-        pendingSpeech?.let { speakText(it.first, it.second) }
-        pendingSpeech = null
-    }
-
-    /** English voices the phone has installed, best first: Indian English, then highest quality. */
-    private fun rankVoices(engine: TextToSpeech): List<Voice> {
-        val all: List<Voice> = try {
-            engine.voices?.toList() ?: emptyList()
-        } catch (e: Exception) {
-            emptyList()
-        }
-        return all
-            .filter { it.locale.language == "en" && it.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) != true }
-            .sortedByDescending { voiceScore(it) }
-            .take(12)
-    }
-
-    private fun voiceScore(v: Voice): Int {
-        var s = when (v.locale.country) {
-            "IN" -> 300
-            "GB" -> 200
-            "US" -> 100
-            else -> 0
-        }
-        s += v.quality / 10
-        if (!v.isNetworkConnectionRequired) s += 5
-        return s
-    }
-
-    private fun applyVoice(engine: TextToSpeech) {
-        val v = voices.getOrNull(voiceIndex)
-        if (v != null) {
-            engine.setVoice(v)
-        } else {
-            val result = engine.setLanguage(Locale.forLanguageTag("en-IN"))
-            if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                engine.setLanguage(Locale.US)
-            }
-        }
-    }
-
-    private fun voiceLabel(): String {
-        val v = voices.getOrNull(voiceIndex) ?: return "the phone's default voice"
-        val accent = when (v.locale.country) {
-            "IN" -> "Indian"
-            "GB" -> "British"
-            "US" -> "American"
-            "AU" -> "Australian"
-            else -> v.locale.displayCountry
-        }
-        val online = if (v.isNetworkConnectionRequired) ", online" else ""
-        return "$accent English, voice ${voiceIndex + 1} of ${voices.size}$online"
-    }
+    // ---------- voice (Kaivra's own synthesizer) ----------
 
     private fun speakText(text: String, listenAfter: Boolean) {
-        val engine = tts
-        if (engine == null || !ttsReady) {
-            pendingSpeech = Pair(text, listenAfter)
-            return
-        }
-        recognizer?.cancel()
-        speechCount += 1
-        val id = "kaivra-$speechCount"
-        listenAfterId = if (listenAfter) id else null
+        stopHearing()
+        val token = speechToken.incrementAndGet()
         sendToPage("speaking", text)
-        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, id)
-    }
-
-    private fun afterSpeech(id: String?) {
-        sendToPage("spoken", id ?: "")
-        if (id != null && id == listenAfterId) {
-            listenAfterId = null
-            startListening()
+        speechExec.execute {
+            val pcm = try { voice.synthesize(text) } catch (e: Exception) { ShortArray(0) }
+            if (token == speechToken.get() && pcm.isNotEmpty()) play(pcm, token)
+            mainHandler.post {
+                if (token == speechToken.get()) {
+                    sendToPage("spoken", "")
+                    if (listenAfter) startListening()
+                }
+            }
         }
     }
 
-    // ---------- ears (speech recognition) ----------
-
-    private val listener = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) { sendToPage("listening", "") }
-        override fun onBeginningOfSpeech() {}
-        override fun onRmsChanged(rmsdB: Float) {}
-        override fun onBufferReceived(buffer: ByteArray?) {}
-        override fun onEndOfSpeech() { sendToPage("thinking", "") }
-        override fun onError(error: Int) { sendToPage("error", error.toString()) }
-        override fun onResults(results: Bundle?) {
-            val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
-            sendToPage("result", text)
+    private fun play(pcm: ShortArray, token: Int) {
+        var track: AudioTrack? = null
+        try {
+            val rate = KaivraVoice.SR
+            val minBuf = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
+            track = AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                .setAudioFormat(AudioFormat.Builder().setSampleRate(rate).setEncoding(AudioFormat.ENCODING_PCM_16BIT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+                .setBufferSizeInBytes(maxOf(minBuf, rate))
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
+            currentTrack = track
+            track.play()
+            var off = 0
+            while (off < pcm.size && token == speechToken.get()) {
+                val n = track.write(pcm, off, minOf(2048, pcm.size - off))
+                if (n <= 0) break
+                off += n
+            }
+            // let the last of the sound play out before listening again
+            val deadline = System.currentTimeMillis() + 3000
+            while (token == speechToken.get() && track.playbackHeadPosition < off && System.currentTimeMillis() < deadline) Thread.sleep(15)
+        } catch (e: Exception) {
+            sendToPage("error", "tts")
+        } finally {
+            try { track?.stop() } catch (e: Exception) {}
+            try { track?.release() } catch (e: Exception) {}
+            if (currentTrack === track) currentTrack = null
         }
-        override fun onPartialResults(partialResults: Bundle?) {
-            val text = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: return
-            if (text.isNotBlank()) sendToPage("partial", text)
-        }
-        override fun onEvent(eventType: Int, params: Bundle?) {}
     }
+
+    private fun stopSpeaking() {
+        speechToken.incrementAndGet()
+        try { currentTrack?.pause(); currentTrack?.flush() } catch (e: Exception) {}
+    }
+
+    private fun voiceLabel(): String = KaivraVoice.VOICE_NAMES[voice.voice()] + ", voice " + (voice.voice() + 1) + " of " + KaivraVoice.VOICE_NAMES.size
+
+    // ---------- hearing (open-source Vosk, offline) ----------
+
+    private fun hearingFolder(): File? = packs.hearingModelDir()
 
     private fun startListening() {
         if (!granted(Manifest.permission.RECORD_AUDIO)) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
             return
         }
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+        val model = hearingModel
+        if (model != null) { beginListening(model); return }
+        val dir = hearingFolder()
+        if (dir == null) { sendToPage("error", "nohearing"); return }
+        listenWhenReady = true
+        if (hearingLoading) return
+        hearingLoading = true
+        sendToPage("thinking", "")
+        Thread {
+            val m = try { Model(dir.absolutePath) } catch (e: Throwable) { null }
+            mainHandler.post {
+                hearingLoading = false
+                hearingModel = m
+                if (m == null) sendToPage("error", "nohearing")
+                else if (listenWhenReady) { listenWhenReady = false; beginListening(m) }
+            }
+        }.start()
+    }
+
+    private fun beginListening(model: Model) {
+        stopHearing()
+        try {
+            val rec = Recognizer(model, 16000f)
+            val svc = SpeechService(rec, 16000f)
+            recognizer = rec
+            speechService = svc
+            svc.startListening(hearingListener, 9000)
+            sendToPage("listening", "")
+        } catch (e: Throwable) {
+            stopHearing()
             sendToPage("error", "unavailable")
-            return
         }
-        val rec = recognizer ?: SpeechRecognizer.createSpeechRecognizer(this).also {
-            it.setRecognitionListener(listener)
-            recognizer = it
+    }
+
+    private fun heardText(json: String?, key: String): String =
+        try { JSONObject(json ?: "{}").optString(key, "").trim() } catch (e: Exception) { "" }
+
+    private val hearingListener = object : RecognitionListener {
+        override fun onPartialResult(hypothesis: String?) {
+            val t = heardText(hypothesis, "partial")
+            if (t.isNotEmpty()) sendToPage("partial", t)
         }
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
-        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-        rec.cancel()
-        rec.startListening(intent)
+        override fun onResult(hypothesis: String?) {
+            val t = heardText(hypothesis, "text")
+            if (t.isNotEmpty() && speechService != null) {
+                stopHearing()
+                sendToPage("thinking", "")
+                sendToPage("result", t)
+            }
+        }
+        override fun onFinalResult(hypothesis: String?) {
+            val t = heardText(hypothesis, "text")
+            if (t.isNotEmpty() && speechService != null) {
+                stopHearing()
+                sendToPage("result", t)
+            }
+        }
+        override fun onError(exception: Exception?) { stopHearing(); sendToPage("error", "1") }
+        override fun onTimeout() { if (speechService != null) { stopHearing(); sendToPage("error", "6") } }
+    }
+
+    private fun stopHearing() {
+        listenWhenReady = false
+        val svc = speechService
+        speechService = null
+        if (svc != null) { try { svc.cancel() } catch (e: Throwable) {}; try { svc.shutdown() } catch (e: Throwable) {} }
+        val rec = recognizer
+        recognizer = null
+        try { rec?.close() } catch (e: Throwable) {}
+    }
+
+    /** Called by Packs after a new hearing pack is installed. */
+    fun hearingChanged() {
+        mainHandler.post { stopHearing(); try { hearingModel?.close() } catch (e: Throwable) {}; hearingModel = null }
+    }
+
+    // ---------- brain (own neural network + knowledge library) ----------
+
+    fun loadBrain() {
+        brainExec.execute {
+            brain = try { packs.brainFile()?.let { KaivraBrain(it) } } catch (e: Throwable) { null }
+            library = try { packs.libraryFile()?.let { KaivraLibrary(it) } } catch (e: Throwable) { null }
+            sendToPage("packs", packs.status().toString())
+        }
+    }
+
+    private fun think(payload: String) {
+        brainExec.execute {
+            val out = JSONObject()
+            try {
+                val req = JSONObject(payload)
+                out.put("id", req.optInt("id"))
+                val question = req.optString("question")
+                val history = ArrayList<Array<String>>()
+                val h = req.optJSONArray("history") ?: JSONArray()
+                for (i in 0 until h.length()) {
+                    val pair = h.optJSONArray(i) ?: continue
+                    history.add(arrayOf(pair.optString(0), pair.optString(1)))
+                }
+                val lib = library
+                val b = brain
+                val hit = lib?.lookup(question)
+                val fact = hit?.get(1)
+                var text = ""
+                if (b != null) {
+                    text = b.reply(question, history, fact, rng)
+                    if (fact != null && !KaivraLibrary.agrees(text, fact)) text = KaivraLibrary.answerFrom(fact)
+                } else if (fact != null) {
+                    text = KaivraLibrary.answerFrom(fact)
+                }
+                if (text.isBlank()) {
+                    out.put("ok", false).put("error", if (b == null) "nobrain" else "empty")
+                } else {
+                    out.put("ok", true).put("text", text).put("source", hit?.get(0) ?: "").put("own", b != null)
+                }
+            } catch (e: Throwable) {
+                out.put("ok", false).put("error", "brain")
+            }
+            sendToPage("brain", out.toString())
+        }
     }
 
     // ---------- device access ----------
@@ -369,7 +440,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         return o.toString()
     }
 
-    private fun sendToPage(type: String, text: String) {
+    fun sendToPage(type: String, text: String) {
         val js = "window.KaivraVoice && window.KaivraVoice.onEvent(" + JSONObject.quote(type) + "," + JSONObject.quote(text) + ")"
         mainHandler.post { webView.evaluateJavascript(js, null) }
     }
@@ -395,21 +466,16 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         @JavascriptInterface
         fun stop() {
             mainHandler.post {
-                listenAfterId = null
-                pendingSpeech = null
-                recognizer?.cancel()
-                tts?.stop()
+                stopSpeaking()
+                stopHearing()
             }
         }
 
-        /** Switches to the next installed voice and remembers it; returns a description of it. */
+        /** Switches to the next of Kaivra's own voices and remembers it; returns its name. */
         @JavascriptInterface
         fun nextVoice(): String {
-            val engine = tts ?: return ""
-            if (voices.isEmpty()) return ""
-            voiceIndex = (voiceIndex + 1) % voices.size
-            applyVoice(engine)
-            prefs.edit().putString("voice", voices[voiceIndex].name).apply()
+            voice.setVoice(voice.voice() + 1)
+            prefs.edit().putInt("ownVoice", voice.voice()).apply()
             return voiceLabel()
         }
 
@@ -423,6 +489,20 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         fun requestAccess(key: String) {
             mainHandler.post { askAccess(key) }
         }
+
+        // Kaivra's own parts: brain, knowledge library, hearing
+        @JavascriptInterface
+        fun packsStatus(): String = packs.status().toString()
+
+        @JavascriptInterface
+        fun checkPacks() { packs.check() }
+
+        @JavascriptInterface
+        fun downloadPacks() { packs.download() }
+
+        /** Asks Kaivra's own brain; the answer arrives as a "brain" event. */
+        @JavascriptInterface
+        fun think(payload: String) { this@MainActivity.think(payload) }
 
         @JavascriptInterface
         fun call(who: String): String = personResult(who) { person ->
@@ -506,33 +586,6 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         @JavascriptInterface
         fun version(): String = BuildConfig.VERSION_NAME
 
-        /** Saves the online brain key on this phone only; returns "gemini", "claude" or "" when removed. */
-        @JavascriptInterface
-        fun setBrainKey(key: String): String {
-            val k = key.trim()
-            prefs.edit().putString("brainKey", k).apply()
-            return brainProvider(k)
-        }
-
-        @JavascriptInterface
-        fun brainStatus(): String = brainProvider(prefs.getString("brainKey", "") ?: "")
-
-        /** Asks the online brain in the background; the answer arrives as a "brain" event. */
-        @JavascriptInterface
-        fun ask(payload: String) {
-            val key = prefs.getString("brainKey", "") ?: ""
-            Thread {
-                val result = try {
-                    val req = JSONObject(payload)
-                    req.put("key", key)
-                    Brain.ask(req)
-                } catch (e: Exception) {
-                    JSONObject().put("ok", false).put("error", "network").toString()
-                }
-                sendToPage("brain", result)
-            }.start()
-        }
-
         @JavascriptInterface
         fun openUrl(url: String) {
             if (!url.startsWith("https://")) return
@@ -540,12 +593,6 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             mainHandler.post { startSafely(intent) }
         }
-    }
-
-    private fun brainProvider(key: String): String = when {
-        key.isEmpty() -> ""
-        key.startsWith("sk-ant-") -> "claude"
-        else -> "gemini"
     }
 
     private fun startSafely(intent: Intent) {
@@ -621,17 +668,19 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     override fun onPause() {
-        listenAfterId = null
-        recognizer?.cancel()
+        stopHearing()
+        stopSpeaking()
         webView.onPause()
         webView.pauseTimers()
         super.onPause()
     }
 
     override fun onDestroy() {
-        recognizer?.destroy()
-        tts?.stop()
-        tts?.shutdown()
+        stopHearing()
+        stopSpeaking()
+        try { hearingModel?.close() } catch (e: Throwable) {}
+        speechExec.shutdownNow()
+        brainExec.shutdownNow()
         webView.destroy()
         super.onDestroy()
     }
