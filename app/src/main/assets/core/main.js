@@ -1,6 +1,7 @@
 /* Mounts the Kaivra core full-screen and gives it a voice: it speaks, listens, reads what you type and replies.
+   Everything is Kaivra's own and runs on the phone: its own voice, its own brain and knowledge library, offline hearing.
    Native side (Android): window.KaivraNative.* (say, listen, stop, nextVoice, accessStatus, requestAccess,
-   call, text, control, torch, volume, vibrate, battery, openApp, version, setBrainKey, brainStatus, ask, openUrl).
+   packsStatus, checkPacks, downloadPacks, think, call, text, control, torch, volume, vibrate, battery, openApp, version, openUrl).
    Native events arrive at window.KaivraVoice.onEvent(type, text). */
 (function () {
   'use strict';
@@ -20,7 +21,7 @@
   // ---------- conversation state ----------
   // mode: idle | speaking | listening | thinking
   const voice = { mode: 'idle', heard: '', partial: '', reply: '', listenNext: false, muted: store.get('muted', '0') === '1', typed: false };
-  let nameSay = store.get('nameSay', 'Kye vrah'); // how the voice pronounces "Kaivra"
+  let nameSay = store.get('nameSay', 'Kaivra'); // how the voice pronounces "Kaivra" (its own voice knows the name)
   let safety = null;
   let laterSleep = null; // a pending "go to standby after speaking"
   const sleepLater = (ms) => { if (laterSleep) clearTimeout(laterSleep); laterSleep = setTimeout(() => { laterSleep = null; sleep(false, true); }, ms); };
@@ -178,18 +179,16 @@
     });
     const allOn = ACCESS.every(([k]) => k === 'control' || access[k]);
     $('acc-all').textContent = allOn ? (access.control ? 'ALL SET' : 'TURN ON PHONE CONTROL') : 'ALLOW ALL';
-    const prov = brainProvider();
-    $('brain-status').innerHTML = prov
-      ? 'Connected · <b>' + (prov === 'claude' ? 'Claude' : 'Google Gemini') + '</b>. Kaivra can answer any question. Paste a new key to replace it, or save an empty box to disconnect.'
-      : 'Not connected. With a free key, Kaivra can answer any question, explain things and help with your work.';
+    renderParts();
   }
   function requestAccess(key) {
     if (native && native.requestAccess) { try { native.requestAccess(key); } catch (e) {} }
   }
   function openAccess(open, focus) {
-    if (open) { readAccess(); renderAccess(); }
+    if (open) { readAccess(); readParts(); renderAccess(); }
     accessPanel.classList.toggle('open', open);
-    if (open && focus === 'brain') setTimeout(() => { $('brain-sec').scrollIntoView({ block: 'start' }); $('brain-key').focus(); }, 60);
+    if (open && focus === 'parts') setTimeout(() => $('parts-sec').scrollIntoView({ block: 'start' }), 60);
+    if (open) { try { if (native && native.checkPacks) native.checkPacks(); } catch (e) {} }
   }
   $('access-btn').addEventListener('click', () => openAccess(true));
   $('acc-close').addEventListener('click', () => openAccess(false));
@@ -201,18 +200,67 @@
     else openAccess(false);
   });
   accessPanel.addEventListener('click', (e) => { if (e.target === accessPanel) openAccess(false); });
-  $('brain-get').addEventListener('click', (e) => { e.preventDefault(); try { native.openUrl('https://aistudio.google.com/apikey'); } catch (err) { window.open('https://aistudio.google.com/apikey', '_blank'); } });
-  $('brain-save').addEventListener('click', () => {
-    const k = $('brain-key').value.trim();
-    let prov = '';
-    try { if (native && native.setBrainKey) prov = native.setBrainKey(k); } catch (e) {}
-    $('brain-key').value = '';
-    $('brain-key').blur();
-    renderAccess();
-    awake(true);
-    voice.heard = '';
-    say(prov ? 'My brain is connected. Ask me anything.' : 'My online brain is disconnected.', false);
+  // ---------- Kaivra's own parts: brain, knowledge library, hearing ----------
+  let parts = {};
+  const PARTS = [
+    ['brain', 'Brain', 'My own neural network, trained from zero'],
+    ['library', 'Knowledge library', 'Facts from Simple English Wikipedia, offline'],
+    ['hearing', 'Hearing', 'Offline speech recognition (open-source Vosk)']
+  ];
+  const mb = (b) => (b / 1048576).toFixed(b > 10485760 ? 0 : 1) + ' MB';
+  function readParts(json) {
+    try { parts = JSON.parse(json || (native && native.packsStatus ? native.packsStatus() : '{}')) || {}; } catch (e) { parts = {}; }
+  }
+  function partNeeds(p) { return p && p.available !== undefined && (!p.ready || p.installed !== p.available); }
+  function renderParts() {
+    const list = $('parts-list');
+    if (!list) return;
+    list.innerHTML = '';
+    let need = 0, any = false;
+    PARTS.forEach(([key, name, desc]) => {
+      const p = parts[key] || {};
+      const row = document.createElement('div');
+      row.className = 'part';
+      row.innerHTML = '<div class="t"><div class="n"></div><div class="d"></div></div><div class="acc-chip"></div>';
+      row.querySelector('.n').textContent = name;
+      let d = desc;
+      const info = p.info || p.latest || {};
+      if (key === 'brain' && p.ready && info.steps) d = 'Trained ' + Number(info.steps).toLocaleString() + ' steps' + (info.trained ? ', ' + info.trained : '');
+      if (key === 'library' && p.ready && info.articles) d = Number(info.articles).toLocaleString() + ' articles, offline';
+      row.querySelector('.d').textContent = d;
+      const chip = row.querySelector('.acc-chip');
+      if (partNeeds(p)) { chip.textContent = p.ready ? 'UPDATE' : 'GET'; need += p.bytes || 0; any = true; }
+      else if (p.ready) { chip.textContent = 'READY'; chip.classList.add('ok'); }
+      else { chip.textContent = 'MISSING'; any = true; }
+      list.appendChild(row);
+    });
+    const btn = $('parts-btn'), help = $('parts-help');
+    btn.disabled = !!parts.busy;
+    if (parts.busy) {
+      const pr = parts.progress;
+      btn.textContent = pr && pr.total ? 'DOWNLOADING ' + Math.floor(100 * pr.done / pr.total) + '%' : 'DOWNLOADING…';
+    } else if (need > 0) btn.textContent = 'DOWNLOAD (' + mb(need) + ')';
+    else if (any) btn.textContent = parts.checked ? 'NOT READY YET' : 'CHECK FOR PARTS';
+    else btn.textContent = 'ALL UP TO DATE';
+    if (parts.error === 'offline') help.textContent = 'Could not reach GitHub. Check the internet connection and try again. After this, everything works offline.';
+    else if (parts.error === 'notyet') help.textContent = 'My first training night has not finished yet. Try again a little later.';
+    else if (parts.error === 'damaged') help.textContent = 'A download was damaged. Tap to try again.';
+    else help.textContent = 'Downloaded once from your own GitHub, then everything works offline. The brain trains every night; tap again to get the newest one.';
+  }
+  $('parts-btn').addEventListener('click', () => {
+    try { if (native && native.downloadPacks) native.downloadPacks(); } catch (e) {}
   });
+  function onPacks(json) {
+    readParts(json);
+    if (accessPanel.classList.contains('open')) renderParts();
+    if (parts.finished && parts.changed) {
+      awake(true);
+      voice.heard = '';
+      const got = parts.changed.split(',').filter(Boolean);
+      if (got.length) say(got.indexOf('brain') >= 0 ? 'My brain is ready. Ask me anything.' : 'My parts are ready.', false);
+      else if (!parts.error) say('Everything is already up to date.', false);
+    }
+  }
 
   // ---------- the parts Kaivra can show ----------
   const EXTRA = {
@@ -259,46 +307,21 @@
     return true;
   }
 
-  // ---------- the online brain (Gemini or Claude, through Android) ----------
-  const brain = { id: 0, waiting: 0, typed: false, history: [] };
-  function brainProvider() { try { return native && native.brainStatus ? native.brainStatus() : ''; } catch (e) { return ''; } }
-  function systemPrompt() {
-    const d = new Date();
-    return [
-      'You are Kaivra, a personal AI assistant that lives on your owner\'s Android phone as a holographic core. Your owner built you, and you are loyal only to them.',
-      'Be warm, confident and direct, like a capable assistant inspired by Jarvis but with your own character.',
-      'Your replies are spoken aloud by a text-to-speech voice, so answer in one to three short sentences unless the owner asks for detail or a longer piece, and then keep it as short as the task allows.',
-      'Use plain sentences only: no markdown, bullet lists, emojis, tables or code blocks.',
-      'Reply in the language the owner uses: English, Hindi or Bengali; Hinglish is fine.',
-      'The app handles these commands itself, so if the owner asks for one, tell them the exact words to say: "what time is it", "battery", "open" plus an app name, "call" plus a name, "text" plus a name and "saying" plus the message, "go home", "open notifications", "lock the phone", "take a screenshot", "torch on" or "torch off", "volume up" or "volume down", "show me" plus a part of your core, "change voice", "mute".',
-      'You cannot yet set reminders, read messages, see the screen or browse the web; say so plainly instead of pretending.',
-      'Current date and time: ' + d.toDateString() + ', ' + d.toLocaleTimeString() + '.'
-    ].join(' ');
-  }
+  // ---------- Kaivra's own brain (on the phone) ----------
+  const brain = { id: 0, waiting: 0, typed: false, history: [], asked: '' };
   function askBrain(text, typed) {
     const answer = (t) => say(t, !typed);
-    if (!brainProvider()) {
-      openAccess(true, 'brain');
-      answer('My online brain is not connected yet, so I only know my built-in commands. Paste a free Gemini key in the brain box, and I will be able to answer anything.');
-      return;
-    }
-    brain.history.push({ role: 'user', text: text });
-    while (brain.history.length > 12 || (brain.history.length && brain.history[0].role !== 'user')) brain.history.shift();
-    brain.id += 1; brain.waiting = brain.id; brain.typed = !!typed;
+    if (!native || !native.think) { answer('My brain only runs inside the Kaivra app.'); return; }
+    brain.id += 1; brain.waiting = brain.id; brain.typed = !!typed; brain.asked = text;
     voice.mode = 'thinking'; voice.reply = '';
     keepAlive(); comp._paint();
-    try { native.ask(JSON.stringify({ id: brain.id, system: systemPrompt(), history: brain.history })); }
-    catch (e) { brain.waiting = 0; brain.history.pop(); answer('I could not reach my online brain.'); }
+    try { native.think(JSON.stringify({ id: brain.id, question: text, history: brain.history.slice(-4) })); }
+    catch (e) { brain.waiting = 0; answer('My brain could not start.'); }
   }
   const BRAIN_ERRORS = {
-    nokey: 'My online brain is not connected. Add a key in the Access screen.',
-    badkey: 'That brain key did not work. Check it in the Access screen.',
-    limit: 'I have used up the free limit for now. Try again in a minute.',
-    credit: 'The Claude account for my brain has no credit left.',
-    network: 'I could not reach my online brain. Check the internet connection.',
-    empty: 'My brain had nothing to say to that. Try asking another way.',
-    model: 'My online brain is not available right now. Try again a little later.',
-    server: 'My online brain had a problem. Try again in a moment.'
+    nobrain: 'My brain is not on this phone yet. Open the shield, and download my parts.',
+    empty: 'I am not sure what to say to that. Try asking another way.',
+    brain: 'Something went wrong in my brain. Try again.'
   };
   function onBrain(json) {
     let r = {};
@@ -307,21 +330,70 @@
     brain.waiting = 0;
     const answer = (t) => say(t, !brain.typed);
     if (r.ok && r.text) {
-      const text = String(r.text).replace(/\*\*|__|[*#`>~]/g, '').replace(/^\s*[-•]\s+/gm, '').trim();
-      brain.history.push({ role: 'assistant', text: text });
+      const text = String(r.text).trim();
+      brain.history.push([brain.asked, text]);
+      if (brain.history.length > 6) brain.history.shift();
       answer(text);
       return;
     }
-    if (brain.history.length && brain.history[brain.history.length - 1].role === 'user') brain.history.pop();
-    if (r.error === 'nokey' || r.error === 'badkey') openAccess(true, 'brain');
-    answer(BRAIN_ERRORS[r.error] || BRAIN_ERRORS.server);
+    if (r.error === 'nobrain') openAccess(true, 'parts');
+    answer(BRAIN_ERRORS[r.error] || BRAIN_ERRORS.brain);
+  }
+
+  // ---------- a small calculator (numbers typed or spoken as words) ----------
+  const NUMW = { zero: 0, oh: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+    eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
+    twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+  function wordsToNumber(str) {
+    const w = str.trim().replace(/-/g, ' ').split(/\s+/).filter((x) => x && x !== 'and');
+    if (!w.length) return null;
+    if (w.length === 1 && /^-?\d+(\.\d+)?$/.test(w[0])) return parseFloat(w[0]);
+    let total = 0, cur = 0, seen = false, neg = false, dec = '', inDec = false;
+    for (const x of w) {
+      if (x === 'minus' || x === 'negative') { neg = true; continue; }
+      if (x === 'point') { inDec = true; continue; }
+      if (inDec) { if (NUMW[x] !== undefined && NUMW[x] < 10) dec += NUMW[x]; else if (/^\d+$/.test(x)) dec += x; else return null; continue; }
+      if (/^\d+(\.\d+)?$/.test(x)) { cur += parseFloat(x); seen = true; continue; }
+      if (NUMW[x] !== undefined) { cur += NUMW[x]; seen = true; continue; }
+      if (x === 'hundred') { cur = (cur || 1) * 100; seen = true; continue; }
+      const big = { thousand: 1e3, lakh: 1e5, million: 1e6, crore: 1e7, billion: 1e9 }[x];
+      if (big) { total += (cur || 1) * big; cur = 0; seen = true; continue; }
+      return null;
+    }
+    if (!seen) return null;
+    let v = total + cur;
+    if (dec) v = parseFloat(v + '.' + dec);
+    return neg ? -v : v;
+  }
+  const OPS = [['plus', '+'], ['added to', '+'], ['minus', '-'], ['less', '-'], ['times', '*'], ['multiplied by', '*'], ['into', '*'], ['x', '*'],
+    ['divided by', '/'], ['over', '/'], ['+', '+'], ['*', '*'], ['/', '/'], ['-', '-']];
+  function calculate(t) {
+    const m = t.match(/^(?:what is|what's|whats|calculate|compute|how much is|tell me)?\s*(.+?)\s*$/);
+    if (!m) return null;
+    const expr = m[1];
+    for (const [w, op] of OPS) {
+      const i = expr.indexOf(' ' + w + ' ');
+      const j = (op === w) ? expr.indexOf(w) : -1;
+      let a, b;
+      if (i > 0) { a = expr.slice(0, i); b = expr.slice(i + w.length + 2); }
+      else if (j > 0 && w.length === 1) { a = expr.slice(0, j); b = expr.slice(j + 1); }
+      else continue;
+      if (w === '-' && /^\s*$/.test(a)) continue;
+      const x = wordsToNumber(a), y = wordsToNumber(b);
+      if (x === null || y === null) continue;
+      let r = op === '+' ? x + y : op === '-' ? x - y : op === '*' ? x * y : (y === 0 ? NaN : x / y);
+      if (!isFinite(r)) return 'That cannot be divided by zero.';
+      r = Math.round(r * 1e6) / 1e6;
+      return 'That is ' + (Math.abs(r) >= 1e15 ? r.toExponential(3) : String(r)) + '.';
+    }
+    return null;
   }
 
   // ---------- Kaivra's built-in brain (offline, simple commands) ----------
   const pad = (n) => String(n).padStart(2, '0');
   const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const HELP = 'I can tell you the time, the date and the battery, open any app, call or text your contacts, go home, open notifications, lock the phone, take a screenshot, turn the torch on or off, change the volume, and show any part of my core. With my online brain connected, you can also ask me anything. Say change voice to hear another voice, or stop when you are done.';
+  const HELP = 'I can tell you the time, the date and the battery, open any app, call or text your contacts, go home, open notifications, lock the phone, take a screenshot, turn the torch on or off, change the volume, and show any part of my core. I can also answer questions from my own brain and knowledge library, and do simple sums. Say change voice to hear another voice, or stop when you are done.';
   const CONTROL = {
     home: ['Going home.', true], back: ['Going back.', false], recents: ['Here are your recent apps.', true],
     notifications: ['Here are your notifications.', true], quicksettings: ['Here are your quick settings.', true],
@@ -365,9 +437,9 @@
       sleep(true);
       return;
     }
-    if (word(/^(connect|add|set up|setup)( (your|the|my|online))* brain\b/) || word(/^brain (key|setup|settings)$/)) {
-      openAccess(true, 'brain');
-      answer(brainProvider() ? 'My brain is already connected. You can paste a new key to replace it.' : 'Paste a free Gemini key in the brain box, then tap save.');
+    if (word(/^((connect|add|set up|setup|download|update|get)( (your|the|my|own))* (brain|parts|library|hearing))$/) || word(/^brain (setup|settings|status)$/)) {
+      openAccess(true, 'parts');
+      answer('Here are my own parts. Tap download to get the newest ones.');
       return;
     }
     if (word(/^(open |show )?(the |my )?(permissions?|access|setup|set up)( screen| settings)?$/)) {
@@ -442,6 +514,9 @@
       answer('I cannot send messages here.'); return;
     }
 
+    const sum = calculate(rawN.toLowerCase().replace(/,/g, '').replace(/[!?]+$/, '').replace(/\.$/, '').trim());
+    if (sum) { answer(sum); return; }
+
     if (word(/^(zoom out|reset( the)?( view)?|go back|full view|close it|close (the )?(vault|file|part))$/)) { resetView(); answer('Back to the full view.'); return; }
 
     const m = t.match(/^(?:please\s+|can you\s+|kaivra\s+)?(open|launch|start|run|show me|show|go to|zoom into|zoom in on|zoom in to|take me to)\s+(.+)$/);
@@ -473,6 +548,7 @@
   window.KaivraVoice = {
     onEvent(type, text) {
       if (type === 'access') { readAccess(text); if (accessPanel.classList.contains('open')) renderAccess(); return; }
+      if (type === 'packs') { onPacks(text); return; }
       if (!comp._activeT && type !== 'spoken') return;
       if (type === 'brain') { onBrain(text); return; }
       keepAlive();
@@ -498,9 +574,10 @@
     if (code === '8' && busyRetries < 2) { busyRetries++; setTimeout(() => { try { native.listen(); } catch (e) {} }, 500); return; }
     busyRetries = 0;
     if (code === 'permission') { voice.reply = 'I need microphone permission to hear you. You can still type to me.'; say(voice.reply, false); openTypebar(true); return; }
-    if (code === 'unavailable') { voice.reply = 'Speech recognition is not available on this phone. Please install or update the Google app. You can type to me meanwhile.'; say(voice.reply, false); openTypebar(true); return; }
-    if (code === 'tts') { voice.reply = 'My voice engine is not available on this phone.'; comp._paint(); return; }
-    if (code === '1' || code === '2' || code === '4') { voice.reply = 'I could not hear you properly. Check the internet connection, or type to me.'; say(voice.reply, false); openTypebar(true); return; }
+    if (code === 'unavailable') { voice.reply = 'My hearing could not start on this phone. You can type to me meanwhile.'; say(voice.reply, false); openTypebar(true); return; }
+    if (code === 'tts') { voice.reply = 'My voice could not play on this phone.'; comp._paint(); return; }
+    if (code === 'nohearing') { openAccess(true, 'parts'); voice.reply = 'I need my hearing first. Download my parts in the shield screen. You can type to me meanwhile.'; say(voice.reply, false); openTypebar(true); return; }
+    if (code === '1' || code === '2' || code === '4') { voice.reply = 'I could not hear you properly. Try again, or type to me.'; say(voice.reply, false); openTypebar(true); return; }
     voice.reply = 'Something went wrong with my hearing. Tap the core to try again, or type to me.'; say(voice.reply, false); sleepLater(6000);
   }
 
