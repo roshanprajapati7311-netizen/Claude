@@ -72,10 +72,11 @@ abstract class FetchVoiceDictionary : DefaultTask() {
     }
 }
 
-val fetchVoiceDictionary = tasks.register<FetchVoiceDictionary>("fetchVoiceDictionary")
-
 androidComponents {
     onVariants { variant ->
-        variant.sources.assets?.addGeneratedSourceDirectory(fetchVoiceDictionary, FetchVoiceDictionary::outputDir)
+        // one task per build type, as the Android Gradle plugin expects for generated sources
+        val name = "fetch" + variant.name.replaceFirstChar { it.uppercase() } + "VoiceDictionary"
+        val fetch = tasks.register<FetchVoiceDictionary>(name)
+        variant.sources.assets?.addGeneratedSourceDirectory(fetch, FetchVoiceDictionary::outputDir)
     }
 }
