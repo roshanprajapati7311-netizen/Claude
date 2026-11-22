@@ -10,20 +10,35 @@ A personal assistant that lives on your phone. It's loyal to one owner and wakes
 - **Pinch** to zoom: up to 100,000× across the system, and 10,000× inside a part or a file (lines → cells → bytes → bits).
 - **Drag** to rotate, or to move around when zoomed in. **Tap empty space** to step back out.
 
-## Voice
+## Voice and typing
 
 Tap the core and Kaivra says *"Kaivra online. How can I help?"*, then listens. It answers out loud, shows the conversation in the bottom card, and keeps listening until you say **stop** or stay quiet.
 
-| Say | Kaivra |
+Can't speak right now? Tap the **keyboard** button and type instead. Typed commands get the same answers; the speaker button next to the box mutes Kaivra's voice so it replies in text only.
+
+| Say or type | Kaivra |
 |---|---|
 | "What time is it?" / "What's the date?" / "Battery" | tells you |
 | "Open YouTube" (any installed app) | opens it |
+| "Call Mom" / "Text Rahul saying I'm on my way" | calls / opens the message ready to send |
+| "Go home" / "Open notifications" / "Quick settings" / "Recent apps" | does it (needs Phone control) |
+| "Lock the phone" / "Take a screenshot" | does it (needs Phone control) |
+| "Torch on" / "Torch off" / "Volume up" / "Volume down" | does it |
 | "Show me the security guard" / "Open memory" | flies to that part / opens its vault, and describes it |
-| "Who are you?" / "What can you do?" | introduces itself / lists its skills |
-| "Zoom out" | back to the full view |
-| "Stop" / "Go to sleep" | "Standing by." |
+| "Change voice" | switches to the next voice on the phone and remembers it |
+| "Say your name as Kai-vraa" | changes how the voice pronounces *Kaivra* |
+| "Mute" / "Unmute" | text-only replies / voice back on |
+| "Permissions" | opens the Access screen |
+| "What can you do?" / "Stop" | lists its skills / "Standing by." |
 
-The first time, Android asks for microphone permission. Listening uses the phone's speech recognition (the Google app), which may need internet unless the offline English (India) pack is installed. Anything else gets an honest "I can't answer that yet": the real brain (offline + online) is the next big step.
+Listening uses the phone's speech recognition (the Google app), which may need internet unless the offline English (India) pack is installed. For better voices: Settings → Text-to-speech → Speech Services by Google → install voice data → English (India).
+
+## Access
+
+On first launch Kaivra opens its **Access** screen (also the shield button, top right). Android only lets an app reach the phone with the owner's OK, so each kind of access is approved once:
+
+- **Microphone, Contacts, Phone calls, Notifications**: tap **ALLOW ALL**.
+- **Phone control**: Settings → Accessibility → *Kaivra phone control* → on. If Android calls it a *restricted setting*: App info → ⋮ → *Allow restricted settings*, then turn it on.
 
 ## What's inside (outside → in)
 
@@ -50,20 +65,21 @@ If an update ever refuses to install, uninstall the old Kaivra first and then in
 
 ```
 app/src/main/assets/core/   the core — kaivra-core.js is the design's code unchanged; main.js runs it full-screen
-app/src/main/java/…/        Android shell: full-screen view, voice (text-to-speech), listening (speech recognition), vibration, opening apps
+app/src/main/java/…/        Android shell: full-screen view, voice, listening, device access, phone control service, opening apps
 .github/workflows/          builds the APK and publishes it to Releases
 ```
 
-The core talks to Android through `window.KaivraNative` (`say`, `listen`, `stop`, `vibrate`, `battery`, `openApp`, `version`); Android answers through `window.KaivraVoice.onEvent(type, text)`.
+The core talks to Android through `window.KaivraNative` (`say`, `listen`, `stop`, `nextVoice`, `accessStatus`, `requestAccess`, `call`, `text`, `control`, `torch`, `volume`, `vibrate`, `battery`, `openApp`, `version`); Android answers through `window.KaivraVoice.onEvent(type, text)`.
 The running core is `window.KaivraCore`.
 
 ## Roadmap
 
 - [x] Holographic core home screen: parts, vaults, files, deep zoom, tap to wake
 - [x] Voice: speaks, listens, replies to simple commands, opens apps, shows parts
+- [x] Typing, voice choice, name pronunciation, Access screen, phone control (home, back, notifications, lock, screenshot), calls, texts, torch, volume
 - [ ] Wake phrase spoken in the owner's own voice (voice lock)
 - [ ] Runs in the background, including while the phone is locked
-- [ ] Basics: calls, texts, email on command
+- [ ] Basics: email, WhatsApp, reminders on command
 - [ ] Offline brain (on-phone model) + online brain, switchable
 - [ ] Memory vaults that really store data, browsable inside the hologram
 - [ ] Plugin system: add features on command

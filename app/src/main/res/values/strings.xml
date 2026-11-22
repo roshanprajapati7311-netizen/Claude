@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="control_label">Kaivra phone control</string>
+    <string name="control_description">Lets Kaivra act on your phone when you ask: go home, go back, open notifications and quick settings, show recent apps, lock the screen and take screenshots. Kaivra only acts on your command.</string>
+</resources>

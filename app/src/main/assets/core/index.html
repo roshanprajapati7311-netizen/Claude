@@ -35,6 +35,41 @@
   #sel-name { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 17px; letter-spacing: 0.06em; margin-top: 2px; color: var(--accent); }
   #sel-desc { font-size: 12.5px; line-height: 1.4; margin-top: 3px; color: #D9D2E6; }
   #hint { font-size: 13px; line-height: 1.6; color: #A79FBF; }
+
+  /* top-right access button, keyboard button, typing bar */
+  header { position: relative; width: 100%; }
+  .icon-btn { width: 40px; height: 40px; padding: 0; margin: 0; border: 1px solid rgba(255,255,255,0.10); border-radius: 12px; background: rgba(255,255,255,0.03);
+              color: var(--accent); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .icon-btn svg { width: 20px; height: 20px; }
+  .icon-btn.on { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+  #access-btn { position: absolute; right: 16px; top: -6px; }
+  .state-row { position: relative; width: 100%; justify-content: center; }
+  #kb-btn { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); }
+  #typebar { display: none; width: 100%; margin-top: 10px; gap: 8px; align-items: center; }
+  #typebar.open { display: flex; }
+  #type-in { flex: 1; min-width: 0; height: 44px; box-sizing: border-box; padding: 0 14px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+             background: rgba(255,255,255,0.04); color: #F4EEE3; font: 500 15px 'Inter', system-ui, sans-serif; outline: none; -webkit-user-select: text; user-select: text; }
+  #type-in::placeholder { color: #7E7896; }
+  #type-in:focus { border-color: var(--accent); }
+  #send-btn, #mute-btn { width: 44px; height: 44px; flex: none; }
+
+  /* access screen */
+  #access { position: fixed; inset: 0; z-index: 10; display: none; font-family: 'Inter', system-ui, sans-serif; color: #F4EEE3; align-items: center; justify-content: center; background: rgba(5,4,9,0.93); padding: 20px; box-sizing: border-box; }
+  #access.open { display: flex; }
+  .acc-card { width: min(380px, 100%); max-height: 100%; overflow: auto; box-sizing: border-box; padding: 18px 16px 16px; border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 16px; background: #0A0912; }
+  .acc-head { display: flex; align-items: center; justify-content: space-between; }
+  .acc-title { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 19px; letter-spacing: 0.2em; color: var(--accent); }
+  .acc-sub { font-size: 13px; line-height: 1.5; color: #A79FBF; margin: 8px 0 12px; }
+  .acc-row { width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; padding: 11px 12px; margin: 0 0 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);
+             background: rgba(255,255,255,0.03); color: #F4EEE3; font: inherit; cursor: pointer; }
+  .acc-row .t { flex: 1; min-width: 0; }
+  .acc-row .n { font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 0.04em; }
+  .acc-row .d { font-size: 12px; line-height: 1.4; color: #A79FBF; margin-top: 2px; }
+  .acc-chip { flex: none; font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.14em; padding: 5px 9px; border-radius: 8px; border: 1px solid rgba(255,177,59,0.5); color: #FFB13B; }
+  .acc-chip.ok { border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); }
+  .acc-all { width: 100%; height: 46px; margin: 4px 0 10px; border-radius: 12px; border: 0; background: var(--accent); color: #05040A; font-family: 'Rajdhani', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: 0.18em; cursor: pointer; }
+  .acc-note { font-size: 12px; line-height: 1.5; color: #8E88A6; }
+  .acc-note a { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -42,6 +77,9 @@
   <header>
     <div class="brand">KAIVRA</div>
     <div class="brand-hi" lang="hi">कैव्रा</div>
+    <button type="button" id="access-btn" class="icon-btn" aria-label="Access and permissions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+    </button>
   </header>
 
   <main>
@@ -58,6 +96,9 @@
         <span class="kv-bar" style="animation-delay: 0.3s"></span>
         <span class="kv-bar" style="animation-delay: 0.15s"></span>
       </div>
+      <button type="button" id="kb-btn" class="icon-btn" aria-label="Type to Kaivra">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h1M10 10h1M13.5 10h1M17 10h.5M7 14h10"/></svg>
+      </button>
     </div>
   </main>
 
@@ -68,7 +109,29 @@
       <div id="sel-desc"></div>
     </div>
     <div id="hint"><span id="hintA"></span><br><span id="hintB"></span></div>
+    <form id="typebar" autocomplete="off">
+      <button type="button" id="mute-btn" class="icon-btn" aria-label="Mute Kaivra's voice"></button>
+      <input id="type-in" type="text" placeholder="Type to Kaivra…" enterkeyhint="send" autocapitalize="sentences" spellcheck="false">
+      <button type="submit" id="send-btn" class="icon-btn" aria-label="Send">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-2.5-6.5L4 12z"/></svg>
+      </button>
+    </form>
   </footer>
+</div>
+
+<div id="access" role="dialog" aria-modal="true" aria-labelledby="acc-title">
+  <div class="acc-card">
+    <div class="acc-head">
+      <div class="acc-title" id="acc-title">ACCESS</div>
+      <button type="button" id="acc-close" class="icon-btn" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="acc-sub">Android lets an app reach your phone only with your OK. Allow what Kaivra should use; you can change it any time here.</div>
+    <button type="button" id="acc-all" class="acc-all">ALLOW ALL</button>
+    <div id="acc-list"></div>
+    <div class="acc-note">Phone control is switched on in <b>Settings → Accessibility → Kaivra phone control</b>. If Android says it is a <b>restricted setting</b>, open <a href="#" id="acc-appinfo">App info</a>, tap <b>⋮</b> (top right) → <b>Allow restricted settings</b>, then try again.</div>
+  </div>
 </div>
 
 <script src="dc-shim.js"></script>
