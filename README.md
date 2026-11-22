@@ -1,99 +1,82 @@
 # KAIVRA
 
 A personal assistant that lives on your phone. It's loyal to one owner and wakes up only when that owner calls it.
+**Everything Kaivra thinks, says and hears is its own:** no Google, no OpenAI, no Anthropic, no big company inside.
 
-**v0.1 — the core.** The home screen is the Kaivra core from the *Kaivra Home Screen* design: a 3D map of every part of Kaivra.
+| Part | What it is | Made by |
+|---|---|---|
+| **Brain** | A transformer neural network written from scratch (`brain/`), with its own tokenizer, hand-written backpropagation and its own trainer. It runs on the phone in pure Java (`KaivraBrain.java`). | This project |
+| **Training** | Every night on GitHub's free computers, continuing from the night before (`brain/ci.sh`). Progress: the `brain-log` branch. | This project |
+| **Knowledge library** | Facts from Simple English Wikipedia, cleaned and indexed by our own code (`brain/data.py`), searched offline on the phone (`KaivraLibrary.java`). | Text: Wikipedia volunteers (Wikimedia, nonprofit). Code: this project |
+| **Voice** | A formant speech synthesizer written from scratch (`KaivraVoice.java`): text → sounds → timing and melody → a simulated voice and vocal tract. | This project. Pronunciations: CMU Pronouncing Dictionary (Carnegie Mellon University) |
+| **Hearing** | Vosk, open-source offline speech recognition, Indian English model. | Alpha Cephei (open source, Apache 2.0) |
+| **Home screen** | The holographic core from the *Kaivra Home Screen* design. | This project |
 
-- **Tap the core** (the bright centre) to wake Kaivra: it switches to LISTENING, then back to STANDING BY.
-- **Tap a part** to focus on it and see what it does in the card at the bottom. **Tap it again** to open its data vault.
-- Inside a vault, **tap a file block** for its summary tab, and **tap again** (or OPEN FILE) to read it.
-- **Pinch** to zoom: up to 100,000× across the system, and 10,000× inside a part or a file (lines → cells → bytes → bits).
-- **Drag** to rotate, or to move around when zoomed in. **Tap empty space** to step back out.
+The only outside pieces are Android itself and GitHub, which builds the app and stores Kaivra's parts.
 
-## Voice and typing
+## The home screen
 
-Tap the core and Kaivra says *"Kaivra online. How can I help?"*, then listens. It answers out loud, shows the conversation in the bottom card, and keeps listening until you say **stop** or stay quiet.
+- **Tap the core** (the bright centre) to wake Kaivra. It says *"Kaivra online. How can I help?"* and listens.
+- **Tap a part** to focus on it and see what it does. **Tap it again** to open its data vault; tap a file block to read it.
+- **Pinch** to zoom (up to 100,000×), **drag** to rotate or move, **tap empty space** to step back out.
+- Can't speak right now? Tap the **keyboard** button and type. The speaker button next to the box mutes the voice.
 
-Can't speak right now? Tap the **keyboard** button and type instead. Typed commands get the same answers; the speaker button next to the box mutes Kaivra's voice so it replies in text only.
+## What you can say or type
 
 | Say or type | Kaivra |
 |---|---|
 | "What time is it?" / "What's the date?" / "Battery" | tells you |
+| "What is 12 times 7?" / "25 plus 17" | works it out |
 | "Open YouTube" (any installed app) | opens it |
 | "Call Mom" / "Text Rahul saying I'm on my way" | calls / opens the message ready to send |
-| "Go home" / "Open notifications" / "Quick settings" / "Recent apps" | does it (needs Phone control) |
-| "Lock the phone" / "Take a screenshot" | does it (needs Phone control) |
+| "Go home" / "Open notifications" / "Quick settings" / "Recent apps" / "Lock the phone" / "Take a screenshot" | does it (needs Phone control) |
 | "Torch on" / "Torch off" / "Volume up" / "Volume down" | does it |
-| "Show me the security guard" / "Open memory" | flies to that part / opens its vault, and describes it |
-| "Change voice" | switches to the next voice on the phone and remembers it |
-| "Say your name as Kai-vraa" | changes how the voice pronounces *Kaivra* |
-| "Mute" / "Unmute" | text-only replies / voice back on |
-| "Permissions" | opens the Access screen |
-| "What can you do?" / "Stop" | lists its skills / "Standing by." |
-| Anything else ("What is a black hole?", "Help me write a poem") | answered by the online brain |
+| "Show me the security guard" / "Open memory" | flies to that part of the core and describes it |
+| "Change voice" / "Mute" / "Unmute" | switches between Kaivra's own voices / text only / voice back |
+| "Permissions" / "Download your parts" | opens the Access screen |
+| "What is a black hole?" / "Who was Gandhi?" / "How are you?" | answered by Kaivra's own brain and knowledge library |
+| "Stop" | "Standing by." |
 
-Listening uses the phone's speech recognition (the Google app), which may need internet unless the offline English (India) pack is installed. For better voices: Settings → Text-to-speech → Speech Services by Google → install voice data → English (India).
+## First start
 
-## Online brain
+1. Install the APK from **Releases** (`Kaivra-v0.1.N.apk`).
+2. Kaivra opens its **Access** screen (also the shield button, top right):
+   - **Kaivra's own parts → DOWNLOAD** gets the brain, knowledge library and hearing (about 55 MB, once). After that everything works offline. Tap again after a training night to get the newest brain.
+   - **ALLOW ALL** for microphone, contacts, calls and notifications.
+   - **Phone control**: Settings → Accessibility → *Kaivra phone control* → on. If Android calls it a *restricted setting*: App info → ⋮ → *Allow restricted settings*.
 
-Anything that isn't a built-in command goes to Kaivra's online brain, so it can answer questions, explain things and help with work, and it remembers the last few exchanges of the conversation.
+## How the brain learns
 
-1. Get a free key at [Google AI Studio](https://aistudio.google.com/apikey) (sign in → **Create API key** → copy).
-2. In Kaivra: shield button → **Online brain** → paste the key → **SAVE**. Or say "connect brain".
+`brain/` holds all of it, in plain Python and NumPy:
 
-The key is stored only on the phone. Free Gemini keys have rate limits, and Google may use free-tier conversations to improve its products. A Claude key (starting `sk-ant-`, paid) also works. Next step on the roadmap: an offline brain that runs on the phone itself.
+- `tokenizer.py`: byte-level BPE tokenizer, trained from scratch.
+- `model.py`: the transformer (RMSNorm, rotary positions, SwiGLU), its backward pass written by hand, AdamW, and the export to the phone format (int8).
+- `data.py`: downloads Simple English Wikipedia, cleans the wiki markup with our own parser, builds the knowledge library and the training text, including question-and-answer practice.
+- `talk.py`: Kaivra's own conversations: who it is, how it talks, what it can and cannot do yet.
+- `train.py`: trains for a time budget, resumes from the last checkpoint, writes sample answers.
+- `ci.sh`: the nightly run; publishes `brain.bin`, the library and the hearing model to the **kaivra-packs** release, where the app downloads them.
 
-## Access
-
-On first launch Kaivra opens its **Access** screen (also the shield button, top right). Android only lets an app reach the phone with the owner's OK, so each kind of access is approved once:
-
-- **Microphone, Contacts, Phone calls, Notifications**: tap **ALLOW ALL**.
-- **Phone control**: Settings → Accessibility → *Kaivra phone control* → on. If Android calls it a *restricted setting*: App info → ⋮ → *Allow restricted settings*, then turn it on.
-
-## What's inside (outside → in)
-
-| Belt / layer | Parts |
-|---|---|
-| Belt C · Devices & links | This phone, paired PC, Android TV, online brain link, GitHub builds, cloud GPU training |
-| Belt B · Agents | Researcher, Scriptwriter, Designer, Editor, Learning team |
-| Belt A · Plugins | Calls & SMS, Email, WhatsApp, Music, Reminders, Reel editor, Learn crawler, Code builder |
-| Layer 3 · Guard | Security guard, Permission watch, Encryption, Heartbeat |
-| Layer 2 · Framework | Voice engine, Voice lock, Brain models, Phone control, Master key, Change log & undo |
-| Layer 1 · Data | Memory, Knowledge library, Skills, Training lessons, Soul pack |
-| Layer 0 · Core | Kaivra core: brain router, rulebook, identity |
-
-## Install on your phone
-
-1. Open **Releases** on this repo, or go to `…/releases/latest`.
-2. Download `Kaivra-v0.1.N.apk`.
-3. Open the file. If Android asks, allow **Install unknown apps** for your browser.
-
-Every push to `main` builds a new APK automatically (**Actions** tab), so no PC is needed.
-If an update ever refuses to install, uninstall the old Kaivra first and then install the new one.
+The brain is small (about 7 million parameters) and starts out weak. It gets a little better every night; the `brain-log` branch shows its history and sample answers. For facts it reads from its knowledge library, so answers about things in Simple Wikipedia are right from the start.
 
 ## How it's built
 
 ```
-app/src/main/assets/core/   the core — kaivra-core.js is the design's code unchanged; main.js runs it full-screen
-app/src/main/java/…/        Android shell: full-screen view, voice, listening, device access, phone control service, online brain (Brain.kt)
-.github/workflows/          builds the APK and publishes it to Releases
+app/src/main/assets/core/   the home screen: kaivra-core.js is the design's code unchanged; main.js runs it and talks to Android
+app/src/main/java/…/        Android: MainActivity (screen, voice playback, hearing, phone access), Packs (downloads Kaivra's parts),
+                            KaivraBrain, KaivraLibrary, KaivraVoice, KaivraControlService (phone control)
+brain/                      the brain's code and the nightly training; brain/voice/ is the listening test for the voice
+.github/workflows/          build-apk.yml builds the APK on every push; kaivra-brain.yml trains the brain every night
 ```
-
-The core talks to Android through `window.KaivraNative` (`say`, `listen`, `stop`, `nextVoice`, `accessStatus`, `requestAccess`, `call`, `text`, `control`, `torch`, `volume`, `vibrate`, `battery`, `openApp`, `setBrainKey`, `brainStatus`, `ask`, `openUrl`, `version`); Android answers through `window.KaivraVoice.onEvent(type, text)`.
-The running core is `window.KaivraCore`.
 
 ## Roadmap
 
 - [x] Holographic core home screen: parts, vaults, files, deep zoom, tap to wake
-- [x] Voice: speaks, listens, replies to simple commands, opens apps, shows parts
-- [x] Typing, voice choice, name pronunciation, Access screen, phone control (home, back, notifications, lock, screenshot), calls, texts, torch, volume
-- [ ] Wake phrase spoken in the owner's own voice (voice lock)
-- [ ] Runs in the background, including while the phone is locked
-- [ ] Basics: email, WhatsApp, reminders on command
-- [x] Online brain (Gemini free key, or Claude) with conversation memory
-- [ ] Offline brain (on-phone model), switchable with the online brain
+- [x] Typing, Access screen, phone control (home, back, notifications, lock, screenshot), calls, texts, torch, volume
+- [x] Own brain, trained from scratch every night, with its own knowledge library
+- [x] Own voice, written from scratch; offline open-source hearing
+- [ ] Hindi and Bengali (brain, voice and hearing)
+- [ ] Wake phrase spoken in the owner's own voice (voice lock), running in the background
+- [ ] Reminders, email, WhatsApp on command
 - [ ] Memory vaults that really store data, browsable inside the hologram
-- [ ] Plugin system: add features on command
-- [ ] Agent team: create agents, assign work, watch them in Belt B
-- [ ] Learn mode: research a topic online for a project
+- [ ] Plugin system, agent team, learn mode
 - [ ] Reach the owner's other devices after a one-time approval
