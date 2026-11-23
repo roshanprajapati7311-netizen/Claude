@@ -13,7 +13,9 @@ publish_report() {
   local entries="" name path blob
   for pair in "report.md:$W/voice-report.md" "app-build.txt:$W/app-build.txt" "run.txt:$W/voice-run.txt" \
               "search.md:$W/search.md" "best.txt:$W/best.txt" "best-settings.txt:$W/best-settings.txt" \
-              "sample.mp3.b64:$W/sample.mp3.b64" "sample-dict.txt:$W/sample-dict.txt" "explore.txt:$W/explore.txt"; do
+              "sample.mp3.b64:$W/sample.mp3.b64" "sample-dict.txt:$W/sample-dict.txt" "explore.txt:$W/explore.txt" \
+              "voices.txt:$W/voices.txt" "sample-rms.mp3.b64:$W/sample-rms.mp3.b64" "sample-ksp.mp3.b64:$W/sample-ksp.mp3.b64" \
+              "sample-slt.mp3.b64:$W/sample-slt.mp3.b64"; do
     name="${pair%%:*}"; path="${pair#*:}"
     [ -f "$path" ] || continue
     blob=$(git hash-object -w "$path")
@@ -34,17 +36,23 @@ if git -C "$REPO_ROOT" log -1 --format=%B | grep -q "\[voice-explore\]"; then
   exit 0
 fi
 if [ -z "$KAIVRA_FROM_GRADLE" ]; then bash "$ROOT/voice/app_check.sh" "$W" || true; fi
-python3 -m venv "$W/venv" && "$W/venv/bin/pip" install --quiet vosk || { echo "could not install vosk"; exit 1; }
+python3 -m venv "$W/venv" && "$W/venv/bin/pip" install --quiet vosk numpy || { echo "could not install vosk"; exit 1; }
 (sudo apt-get install -y -qq espeak-ng >/dev/null 2>&1 && echo "espeak-ng ready") || echo "no espeak-ng"
 for m in vosk-model-small-en-us-0.15 vosk-model-en-us-0.22-lgraph; do
   [ -d "$m" ] || { curl -fsL --retry 3 -o "$m.zip" "https://alphacephei.com/vosk/models/$m.zip" && unzip -q "$m.zip" && rm "$m.zip"; } || echo "could not get $m"
 done
 [ -s cmudict.dict ] || curl -fsL --retry 3 -o cmudict.dict "https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict" || echo "no dictionary"
 rm -rf j wav_*; mkdir -p j
-javac -encoding UTF-8 -d j "$APP/KaivraVoice.java" "$ROOT/voice/VoiceTest.java" || exit 1
+javac -encoding UTF-8 -d j "$APP/KaivraVoice.java" "$APP/KaivraUnits.java" "$ROOT/voice/VoiceTest.java" || exit 1
 DICT=cmudict.dict; [ -s cmudict.dict ] || DICT=-
 mkdir -p wav_kaivra-base; java -cp j com.kaivra.app.VoiceTest "$DICT" "$ROOT/voice/sentences.txt" wav_kaivra-base 0
-for f in "$ROOT"/voice/variants/*.txt; do
+VARIANTS="$ROOT"/voice/variants/*.txt
+# [voice-build]: make the recorded voices from the free CMU ARCTIC recordings instead of trying variations
+if git -C "$REPO_ROOT" log -1 --format=%B | grep -q "\[voice-build\]"; then
+  bash "$ROOT/voice/build_voice.sh" "$W"
+  VARIANTS=""
+fi
+for f in $VARIANTS; do
   [ -f "$f" ] || continue
   n=$(basename "$f" .txt); mkdir -p "wav_kaivra-$n"
   java -cp j com.kaivra.app.VoiceTest "$DICT" "$ROOT/voice/sentences.txt" "wav_kaivra-$n" 0 "$f"

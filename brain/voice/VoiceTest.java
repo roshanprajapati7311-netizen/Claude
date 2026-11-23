@@ -14,6 +14,12 @@ public class VoiceTest {
         KaivraVoice v = new KaivraVoice();
         if (!a[0].equals("-")) try (InputStream in = new FileInputStream(a[0])) { v.loadDictionary(in); }
         v.setVoice(Integer.parseInt(a[3]));
+        String pack = System.getenv("KAIVRA_UNITS"); // a recorded voice pack (.bin or .bin.gz)
+        if (pack != null && !pack.isEmpty()) {
+            InputStream in = new FileInputStream(pack);
+            if (pack.endsWith(".gz")) in = new java.util.zip.GZIPInputStream(in, 1 << 16);
+            try (InputStream s = in) { v.setUnits(new KaivraUnits(s)); }
+        }
         if (a.length > 4 && !a[4].equals("-")) KaivraVoice.tune(new String(Files.readAllBytes(Paths.get(a[4])), StandardCharsets.UTF_8));
         if (a.length > 5) Files.write(Paths.get(a[5]), KaivraVoice.settings().getBytes(StandardCharsets.UTF_8));
         List<String> lines = Files.readAllLines(Paths.get(a[1]), StandardCharsets.UTF_8);
