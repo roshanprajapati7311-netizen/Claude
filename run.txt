@@ -1,0 +1,88 @@
+espeak-ng ready
+reusing voice-slt.bin (57164658 bytes)
+# Kaivra voice listening test
+
+Run , 2026-11-23 19:23 UTC
+
+| voice | average | en-us-0.22-lgraph | small-en-us-0.15 |
+|---|---|---|---|
+| rec-slt-m-strict-length | **92%** | 92% | 92% |
+| rec-slt-g-longer-glide | **91%** | 92% | 89% |
+| rec-slt-b-smooth | **90%** | 92% | 89% |
+| rec-slt-d-both | **90%** | 92% | 89% |
+| rec-slt-j-wider-search | **90%** | 91% | 90% |
+| rec-slt-n-wide-glide | **90%** | 93% | 88% |
+| rec-slt-i-steady-pitch | **90%** | 92% | 88% |
+| rec-slt-a-plain | **90%** | 92% | 87% |
+| rec-slt-e-pitchjoin-low | **90%** | 91% | 88% |
+| rec-slt-c-length | **89%** | 92% | 87% |
+| rec-slt-k-short-glide | **89%** | 92% | 86% |
+| rec-slt-f-pitchjoin-high | **89%** | 91% | 88% |
+| rec-slt-h-smoother-joins | **88%** | 90% | 87% |
+| rec-slt-l-combined | **88%** | 88% | 87% |
+| espeak | **66%** | 60% | 72% |
+| kaivra-base | **64%** | 60% | 68% |
+
+Word accuracy (higher is clearer).
+
+| recognizer | voice | said | heard | errors |
+|---|---|---|---|---|
+wav_rec-slt-l-combined: 3.832 (20 files)
+wav_rec-slt-m-strict-length: 3.766 (20 files)
+wav_rec-slt-n-wide-glide: 3.751 (20 files)
+naturalness scored in 133 s
+# How natural the voices sound
+
+UTMOS naturalness (1 = bad, 5 = excellent; recorded human speech usually scores about 4).
+
+| voice | naturalness |
+|---|---|
+| wav_rec-slt-h-smoother-joins | **3.86** |
+| wav_rec-slt-l-combined | **3.83** |
+| wav_rec-slt-i-steady-pitch | **3.83** |
+| wav_rec-slt-e-pitchjoin-low | **3.82** |
+| wav_rec-slt-b-smooth | **3.81** |
+| wav_rec-slt-j-wider-search | **3.81** |
+| wav_rec-slt-f-pitchjoin-high | **3.80** |
+| wav_rec-slt-d-both | **3.79** |
+| wav_rec-slt-k-short-glide | **3.78** |
+| wav_rec-slt-m-strict-length | **3.77** |
+| wav_rec-slt-g-longer-glide | **3.76** |
+| wav_rec-slt-a-plain | **3.76** |
+| wav_rec-slt-n-wide-glide | **3.75** |
+| wav_rec-slt-c-length | **3.75** |
+| sample_rec-slt-k-short-glide | **3.73** |
+| sample_rec-slt-j-wider-search | **3.69** |
+| sample_rec-slt-b-smooth | **3.64** |
+| sample_rec-slt-d-both | **3.62** |
+| sample_rec-slt-g-longer-glide | **3.60** |
+| sample_rec-slt-n-wide-glide | **3.56** |
+| sample_rec-slt-c-length | **3.56** |
+| sample_rec-slt-h-smoother-joins | **3.54** |
+| sample_rec-slt-i-steady-pitch | **3.49** |
+| sample_rec-slt-f-pitchjoin-high | **3.47** |
+| sample_rec-slt-a-plain | **3.47** |
+| sample_rec-slt-m-strict-length | **3.46** |
+| sample_rec-slt-l-combined | **3.46** |
+| sample_rec-slt-e-pitchjoin-low | **3.41** |
+| wav_kaivra-base | **2.83** |
+| wav_espeak | **2.32** |
+best settings for slt: j-wider-search
+# Settings for the slt voice
+
+| settings | clarity | naturalness (tests) | naturalness (sample) |
+|---|---|---|---|
+| j-wider-search (picked) | 90% | 3.81 | 3.69 |
+| k-short-glide | 89% | 3.78 | 3.73 |
+| b-smooth | 90% | 3.81 | 3.64 |
+| h-smoother-joins | 88% | 3.86 | 3.54 |
+| d-both | 90% | 3.79 | 3.62 |
+| i-steady-pitch | 90% | 3.83 | 3.49 |
+| l-combined | 88% | 3.83 | 3.46 |
+| g-longer-glide | 91% | 3.76 | 3.60 |
+| f-pitchjoin-high | 89% | 3.80 | 3.47 |
+| n-wide-glide | 90% | 3.75 | 3.56 |
+| e-pitchjoin-low | 90% | 3.82 | 3.41 |
+| c-length | 89% | 3.75 | 3.56 |
+| m-strict-length | 92% | 3.77 | 3.46 |
+| a-plain | 90% | 3.76 | 3.47 |
