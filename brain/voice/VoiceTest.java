@@ -11,6 +11,7 @@ public class VoiceTest {
         KaivraVoice v = new KaivraVoice();
         if (!a[0].equals("-")) try (InputStream in = new FileInputStream(a[0])) { v.loadDictionary(in); }
         v.setVoice(Integer.parseInt(a[3]));
+        if (a.length > 4) KaivraVoice.tune(new String(Files.readAllBytes(Paths.get(a[4])), StandardCharsets.UTF_8));
         List<String> lines = Files.readAllLines(Paths.get(a[1]), StandardCharsets.UTF_8);
         for (int i = 0; i < lines.size(); i++) {
             short[] pcm = v.synthesize(lines.get(i));
