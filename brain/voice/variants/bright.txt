@@ -1,3 +1,2 @@
-# f and th as quiet as before
-F.par += -4
-TH.par += -2
+# flat hiss for f, th, v and lip bursts
+global.FLAT_AB = 1

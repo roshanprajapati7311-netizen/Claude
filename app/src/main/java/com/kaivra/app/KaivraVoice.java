@@ -27,7 +27,7 @@ final class KaivraVoice {
 
     static final String[] VOICE_NAMES = {"Kaivra", "Kaivra deep", "Kaivra bright", "Kaivra soft"};
     // base pitch (Hz), formant scale, speed, breathiness
-    private static final float[][] VOICES = {{112, 1.00f, 1.00f, 0.04f}, {92, 0.95f, 0.94f, 0.03f}, {190, 1.16f, 1.02f, 0.07f}, {160, 1.10f, 0.90f, 0.12f}};
+    private static final float[][] VOICES = {{112, 1.00f, 0.92f, 0.04f}, {92, 0.95f, 0.865f, 0.03f}, {190, 1.16f, 0.94f, 0.07f}, {160, 1.10f, 0.83f, 0.12f}};
     private int voice = 0;
 
     void setVoice(int v) { voice = Math.floorMod(v, VOICES.length); }
@@ -82,28 +82,28 @@ final class KaivraVoice {
         diph("AW", 700, 1250, 2550, 450, 900, 2350, 225);
         diph("OY", 560, 900, 2450, 380, 1850, 2500, 235);
         diph("OW", 560, 1000, 2400, 420, 850, 2350, 185);
-        cons("W", GLIDE, true, 300, 650, 2200, 60, 80, 150, 70, 0.757f, 0);
-        cons("Y", GLIDE, true, 270, 2150, 2950, 50, 150, 250, 59.13f, 0.8f, 0);
-        cons("R", GLIDE, true, 330, 1100, 1450, 70, 100, 120, 70, 0.8f, 0);
+        cons("W", GLIDE, true, 300, 650, 2200, 60, 80, 150, 70, 0.768f, 0);
+        cons("Y", GLIDE, true, 270, 2150, 2950, 50, 150, 250, 62.796f, 0.8f, 0);
+        cons("R", GLIDE, true, 330, 1100, 1450, 70, 100, 120, 70, 0.697f, 0);
         cons("L", GLIDE, true, 330, 1050, 2750, 60, 120, 250, 70, 0.8f, 0);
-        cons("M", NASAL, true, 450, 1000, 2200, 100, 200, 250, 75, 0.5f, 488.7f);
+        cons("M", NASAL, true, 450, 1000, 2200, 100, 200, 250, 75, 0.5f, 480.832f);
         cons("N", NASAL, true, 450, 1650, 2600, 100, 250, 300, 65, 0.5f, 442.935f);
-        cons("NG", NASAL, true, 450, 2050, 2600, 100, 250, 300, 85, 0.5f, 457.65f);
+        cons("NG", NASAL, true, 450, 2050, 2600, 100, 250, 300, 85, 0.475f, 457.65f);
         //                                                                 A2   A3   A4   A5   A6   AB
-        cons("F", FRIC, false, 340, 1100, 2200, 100, 120, 200, 100, 0, 0, -99, -99, -99, -99, 47, 46);
-        cons("TH", FRIC, false, 320, 1400, 2600, 100, 120, 200, 90, 0, 0, -99, -99, -99, 34, 40, 34);
+        cons("F", FRIC, false, 340, 1087.79f, 2200, 100, 120, 200, 100, 0, 0, -99, -99, -99, -99, 47, 46);
+        cons("TH", FRIC, false, 320, 1400, 2600, 100, 120, 200, 87.453f, 0, 0, -99, -99, -99, 34, 40, 34);
         cons("S", FRIC, false, 320, 1700, 2600, 100, 120, 200, 110, 0, 0, -99, -99, -99, 50, 66, -99);
         cons("SH", FRIC, false, 320, 1850, 2400, 100, 120, 200, 128.88f, 0, 0, -99, 71, 67, 62, 54, -99);
         cons("V", FRIC, true, 340, 1100, 2200, 100, 120, 200, 65, 0.149f, 0, -99, -99, -99, -99, 36, 35);
-        cons("DH", FRIC, true, 320, 1400, 2600, 100, 120, 200, 50, 0.25f, 0, -99, -99, -99, 30, 34, 25);
+        cons("DH", FRIC, true, 320, 1400, 2600, 100, 120, 200, 62.55f, 0.25f, 0, -99, -99, -99, 30, 34, 25);
         cons("Z", FRIC, true, 320, 1700, 2600, 100, 120, 200, 85, 0.2f, 0, -99, -99, -99, 47, 61, -99);
-        cons("ZH", FRIC, true, 320, 1850, 2400, 100, 120, 200, 80, 0.2f, 0, -99, 63.917f, 59.917f, 54.917f, 48.917f, -99);
+        cons("ZH", FRIC, true, 320, 1850, 2400, 100, 120, 200, 81.76f, 0.2f, 0, -99, 66.194f, 62.194f, 57.194f, 51.194f, -99);
         cons("HH", ASP, false, 500, 1500, 2500, 200, 200, 250, 70, 0, 0);
-        cons("P", STOP, false, 220, 850, 2200, 100, 120, 200, 85, 0, 0, -99, -99, -99, -99, 45.691f, 55.691f);
+        cons("P", STOP, false, 220, 846.175f, 2200, 100, 120, 200, 85, 0, 0, -99, -99, -99, -99, 45.691f, 55.691f);
         cons("B", STOP, true, 220, 850, 2200, 100, 120, 200, 70, 0, 0, -99, -99, -99, -99, 38.22f, 48.22f);
         cons("T", STOP, false, 220, 1750, 2650, 100, 120, 200, 75.9f, 0, 0, -99, -99, 48, 56, 62, -99);
         cons("D", STOP, true, 220, 1750, 2650, 100, 120, 200, 65, 0, 0, -99, -99, 44, 52, 58, -99);
-        cons("K", STOP, false, 220, 1900, 2400, 100, 120, 200, 80, 0, 0, 64, 70, 58, -99, -99, -99);
+        cons("K", STOP, false, 220, 1900, 2400, 100, 120, 200, 102.64f, 0, 0, 64, 70, 58, -99, -99, -99);
         cons("G", STOP, true, 220, 1900, 2400, 100, 120, 200, 70, 0, 0, 60, 66, 54, -99, -99, -99);
         cons("CH", AFFR, false, 220, 1850, 2400, 100, 120, 200, 140, 0, 0, -99, 68, 64, 59, 52, -99);
         cons("JH", AFFR, true, 220, 1850, 2400, 100, 120, 200, 105, 0.2f, 0, -99, 58, 54, 50, 44, -99);
@@ -498,11 +498,11 @@ final class KaivraVoice {
     }
 
     // ---------------- tunable settings (tuned with the listening test in brain/voice) ----------------
-    static double PAR_GAIN = 0.3, TILT = 0.525, OQ = 0.6, BURST_GAIN = 1.421, ASP_AH = 0.819, HH_AH = 0.482, VOICE_BAR = 0.12;
+    static double PAR_GAIN = 0.3, TILT = 0.525, OQ = 0.6, BURST_GAIN = 1.421, ASP_AH = 0.819, HH_AH = 0.672, VOICE_BAR = 0;
     static int VOT_STRESSED = 11, VOT_UNSTRESSED = 9, BURST_FRAMES = 2, SMOOTH_F1 = 4, SMOOTH_F23 = 5, SMOOTH_AV = 2, NASAL_SPREAD = 4, ONSET_RAMP = 5;
-    static float V_STRESS1 = 0.72f, V_STRESS2 = 0.6f, V_STRESS0 = 0.45f, FINAL_LEN = 1.3f, CONS_LEN = 0.798f, CLUSTER = 0.85f;
+    static float V_STRESS1 = 0.72f, V_STRESS2 = 0.6f, V_STRESS0 = 0.45f, FINAL_LEN = 1.3f, CONS_LEN = 1.117f, CLUSTER = 0.85f;
     static float PAUSE_COMMA = 110, PAUSE_COLON = 170, PAUSE_END = 260, ACCENT_FIRST = 1.1f, ACCENT_LAST = 1.07f, DECLINE = 0.12f;
-    static float F4 = 3350, F5 = 3850, NASAL_ZERO_BW = 78.98f, PITCH = 0, SPEED = 0, CLOSURE_LEN = 0.75f;
+    static float F4 = 3350, F5 = 3850, FLAT_AB = 0, NASAL_ZERO_BW = 78.98f, PITCH = 0, SPEED = 0, CLOSURE_LEN = 0.75f;
 
     /**
      * Changes settings from text, one per line: "global.NAME = value" or "PHONEME.field = values"
@@ -763,7 +763,7 @@ final class KaivraVoice {
                 double d = fn - prevN;
                 prevN = fn;
                 double par = 0;
-                if (af > 0) par = a2 * p2.run(d) - a3 * p3.run(d) + a4 * p4.run(d) - a5 * p5.run(d) + a6 * p6.run(d) + ab * d * 0.5;
+                if (af > 0) par = a2 * p2.run(d) - a3 * p3.run(d) + a4 * p4.run(d) - a5 * p5.run(d) + a6 * p6.run(d) + ab * (FLAT_AB > 0 ? fn : d) * 0.5;
                 else { p2.run(0); p3.run(0); p4.run(0); p5.run(0); p6.run(0); }
                 double y = c * 0.6 + par * PAR_GAIN;
                 double hp = y - dc1 + 0.995 * dcY; // remove any DC

@@ -1,2 +1,2 @@
-# shorter release bursts
-global.BURST_FRAMES += -1
+# fast pace, as before
+global.SPEED = 1.0

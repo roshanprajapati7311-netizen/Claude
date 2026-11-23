@@ -1,2 +1,2 @@
-# hard voice onset after silence (as before)
-global.ONSET_RAMP = 0
+# slower still
+global.SPEED = 0.85
