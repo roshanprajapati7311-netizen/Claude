@@ -1,0 +1,2 @@
+# slower speech
+global.SPEED = 0.85

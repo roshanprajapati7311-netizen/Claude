@@ -1,0 +1,4 @@
+# longer aspiration after p, t, k
+global.VOT_STRESSED = 11
+global.VOT_UNSTRESSED = 7
+global.ASP_AH = 0.5

@@ -30,14 +30,19 @@ cd "$W"
 if [ -z "$KAIVRA_FROM_GRADLE" ]; then bash "$ROOT/voice/app_check.sh" "$W" || true; fi
 python3 -m venv "$W/venv" && "$W/venv/bin/pip" install --quiet vosk || { echo "could not install vosk"; exit 1; }
 (sudo apt-get install -y -qq espeak-ng >/dev/null 2>&1 && echo "espeak-ng ready") || echo "no espeak-ng"
-for m in vosk-model-small-en-us-0.15 vosk-model-small-en-in-0.4 vosk-model-en-us-0.22-lgraph; do
+for m in vosk-model-small-en-us-0.15 vosk-model-en-us-0.22-lgraph; do
   [ -d "$m" ] || { curl -fsL --retry 3 -o "$m.zip" "https://alphacephei.com/vosk/models/$m.zip" && unzip -q "$m.zip" && rm "$m.zip"; } || echo "could not get $m"
 done
 [ -s cmudict.dict ] || curl -fsL --retry 3 -o cmudict.dict "https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict" || echo "no dictionary"
 rm -rf j wav_*; mkdir -p j
 javac -encoding UTF-8 -d j "$APP/KaivraVoice.java" "$ROOT/voice/VoiceTest.java" || exit 1
 DICT=cmudict.dict; [ -s cmudict.dict ] || DICT=-
-for v in 0 2; do mkdir -p "wav_kaivra-$v"; java -cp j com.kaivra.app.VoiceTest "$DICT" "$ROOT/voice/sentences.txt" "wav_kaivra-$v" "$v"; done
+mkdir -p wav_kaivra-base; java -cp j com.kaivra.app.VoiceTest "$DICT" "$ROOT/voice/sentences.txt" wav_kaivra-base 0
+for f in "$ROOT"/voice/variants/*.txt; do
+  [ -f "$f" ] || continue
+  n=$(basename "$f" .txt); mkdir -p "wav_kaivra-$n"
+  java -cp j com.kaivra.app.VoiceTest "$DICT" "$ROOT/voice/sentences.txt" "wav_kaivra-$n" 0 "$f"
+done
 if command -v espeak-ng >/dev/null; then
   mkdir -p wav_espeak; i=0
   while IFS= read -r line; do espeak-ng -v en-us -s 165 -w "wav_espeak/$(printf %02d $i).wav" "$line"; i=$((i+1)); done < "$ROOT/voice/sentences.txt"

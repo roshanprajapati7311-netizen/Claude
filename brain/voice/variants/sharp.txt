@@ -1,0 +1,3 @@
+# sharper vowel targets
+global.SMOOTH_F1 = 3
+global.SMOOTH_F23 = 3

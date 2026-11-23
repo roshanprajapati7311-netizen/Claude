@@ -48,10 +48,12 @@ for m in models:
             tot += len(r); err += e
             detail.append(f"| {m.replace('vosk-model-', '')} | {s[4:]} | {ref} | {hyp} | {e} |")
         summary[(m, s)] = 100.0 * max(0, tot - err) / tot
-lines.append("| recognizer | " + " | ".join(s[4:] for s in systems) + " |")
-lines.append("|---|" + "---|" * len(systems))
-for m in models:
-    lines.append(f"| {m.replace('vosk-model-', '')} | " + " | ".join(f"{summary[(m, s)]:.0f}%" for s in systems) + " |")
+mean = {s: sum(summary[(m, s)] for m in models) / max(1, len(models)) for s in systems}
+order = sorted(systems, key=lambda s: -mean[s])
+lines.append("| voice | average | " + " | ".join(m.replace('vosk-model-', '') for m in models) + " |")
+lines.append("|---|---|" + "---|" * len(models))
+for s in order:
+    lines.append(f"| {s[4:]} | **{mean[s]:.0f}%** | " + " | ".join(f"{summary[(m, s)]:.0f}%" for m in models) + " |")
 lines.append("\nWord accuracy (higher is clearer).\n\n| recognizer | voice | said | heard | errors |\n|---|---|---|---|---|")
 lines += detail
 open(out, "w").write("\n".join(lines) + "\n")

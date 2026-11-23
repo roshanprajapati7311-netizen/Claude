@@ -1,0 +1,3 @@
+# stronger, longer release bursts
+global.BURST_FRAMES = 3
+global.BURST_GAIN = 2.0
