@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -61,7 +63,7 @@ abstract class FetchVoiceDictionary : DefaultTask() {
         if (f.isFile && f.length() > 1_000_000) return
         f.parentFile.mkdirs()
         try {
-            java.net.URI("https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict").toURL().openStream().use { input ->
+            URI("https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict.dict").toURL().openStream().use { input ->
                 f.outputStream().use { input.copyTo(it) }
             }
             logger.lifecycle("Kaivra: pronunciation dictionary ready (${f.length()} bytes)")
