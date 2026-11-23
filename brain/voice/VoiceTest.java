@@ -20,13 +20,47 @@ public class VoiceTest {
             if (pack.endsWith(".gz")) in = new java.util.zip.GZIPInputStream(in, 1 << 16);
             try (InputStream s = in) { v.setUnits(new KaivraUnits(s)); }
         }
-        if (a.length > 4 && !a[4].equals("-")) KaivraVoice.tune(new String(Files.readAllBytes(Paths.get(a[4])), StandardCharsets.UTF_8));
-        if (a.length > 5) Files.write(Paths.get(a[5]), KaivraVoice.settings().getBytes(StandardCharsets.UTF_8));
+        if (a.length > 4 && !a[4].equals("-")) {
+            String spec = new String(Files.readAllBytes(Paths.get(a[4])), StandardCharsets.UTF_8);
+            KaivraVoice.tune(spec);
+            tuneUnits(spec);
+        }
+        if (a.length > 5) Files.write(Paths.get(a[5]), (KaivraVoice.settings() + unitSettings()).getBytes(StandardCharsets.UTF_8));
         List<String> lines = Files.readAllLines(Paths.get(a[1]), StandardCharsets.UTF_8);
         for (int i = 0; i < lines.size(); i++) {
             short[] pcm = v.synthesize(lines.get(i));
             writeWav(new File(a[2], String.format("%02d.wav", i)), pcm);
         }
+    }
+
+    /** "units.NAME = value" lines set the recorded voice's settings (KaivraUnits static fields). */
+    static void tuneUnits(String spec) {
+        for (String raw : spec.split("\n")) {
+            String line = raw.replaceAll("#.*", "").trim();
+            if (!line.startsWith("units.") || !line.contains("=")) continue;
+            String key = line.substring(6, line.indexOf('=')).trim();
+            String val = line.substring(line.indexOf('=') + 1).trim().split("[\\s,]+")[0];
+            try {
+                java.lang.reflect.Field f = KaivraUnits.class.getDeclaredField(key);
+                if (f.getType() == int.class) f.setInt(null, (int) Math.round(Double.parseDouble(val)));
+                else if (f.getType() == double.class) f.setDouble(null, Double.parseDouble(val));
+                else f.setFloat(null, Float.parseFloat(val));
+            } catch (Exception e) {
+                System.err.println("unknown setting " + key);
+            }
+        }
+    }
+
+    static String unitSettings() {
+        StringBuilder b = new StringBuilder();
+        for (java.lang.reflect.Field f : KaivraUnits.class.getDeclaredFields()) {
+            int m = f.getModifiers();
+            if (!java.lang.reflect.Modifier.isStatic(m) || java.lang.reflect.Modifier.isFinal(m)) continue;
+            Class<?> t = f.getType();
+            if (t != double.class && t != int.class && t != float.class) continue;
+            try { b.append("units.").append(f.getName()).append(" = ").append(f.get(null)).append('\n'); } catch (Exception e) { /* skip */ }
+        }
+        return b.toString();
     }
 
     static void writeWav(File f, short[] pcm) throws IOException {

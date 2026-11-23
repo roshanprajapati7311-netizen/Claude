@@ -16,7 +16,8 @@ publish_report() {
               "sample.mp3.b64:$W/sample.mp3.b64" "sample-dict.txt:$W/sample-dict.txt" "explore.txt:$W/explore.txt" \
               "voices.txt:$W/voices.txt" "sample-rms.mp3.b64:$W/sample-rms.mp3.b64" "sample-ksp.mp3.b64:$W/sample-ksp.mp3.b64" \
               "sample-slt.mp3.b64:$W/sample-slt.mp3.b64" "sample-rms.mp3:$W/sample-rms.mp3" "sample-ksp.mp3:$W/sample-ksp.mp3" \
-              "sample-slt.mp3:$W/sample-slt.mp3"; do
+              "sample-slt.mp3:$W/sample-slt.mp3" "naturalness.md:$W/naturalness.md" "pick.md:$W/pick.md" \
+              "best-units.txt:$W/best-units.txt" "sample-slt-before.mp3:$W/sample-slt-before.mp3"; do
     name="${pair%%:*}"; path="${pair#*:}"
     [ -f "$path" ] || continue
     blob=$(git hash-object -w "$path")
@@ -63,6 +64,18 @@ if command -v espeak-ng >/dev/null; then
   while IFS= read -r line; do espeak-ng -v en-us -s 165 -w "wav_espeak/$(printf %02d $i).wav" "$line"; i=$((i+1)); done < "$ROOT/voice/sentences.txt"
 fi
 "$W/venv/bin/python" "$ROOT/voice/voice_check.py" "$W" "$W/voice-report.md"
+
+# [voice-build]: how natural each variant of the default voice sounds, then keep the best one
+if git -C "$REPO_ROOT" log -1 --format=%B | grep -q "\[voice-build\]"; then
+  "$W/venv/bin/pip" install --quiet torch torchaudio --index-url https://download.pytorch.org/whl/cpu || echo "could not install the naturalness scorer"
+  "$W/venv/bin/python" "$ROOT/voice/naturalness.py" "$W" "$W/naturalness.md" 2>&1 | tail -40
+  S="${TUNE_SPEAKER:-slt}"
+  BEST=$("$W/venv/bin/python" "$ROOT/voice/pick_units.py" "$W" "$S" "$ROOT/voice/unit_variants")
+  echo "best settings for $S: $BEST"; cat "$W/pick.md" 2>/dev/null
+  command -v ffmpeg >/dev/null || sudo apt-get install -y -qq ffmpeg >/dev/null 2>&1
+  [ -s "$W/sample_rec-$S-$BEST/00.wav" ] && ffmpeg -y -loglevel error -i "$W/sample_rec-$S-$BEST/00.wav" -codec:a libmp3lame -b:a 64k "$W/sample-$S.mp3"
+  [ -s "$W/sample_rec-$S-a-plain/00.wav" ] && ffmpeg -y -loglevel error -i "$W/sample_rec-$S-a-plain/00.wav" -codec:a libmp3lame -b:a 64k "$W/sample-$S-before.mp3"
+fi
 
 # [voice-search] in the commit message: Kaivra tunes its own voice for a while, then speaks a sample
 if git -C "$REPO_ROOT" log -1 --format=%B | grep -q "\[voice-search\]"; then

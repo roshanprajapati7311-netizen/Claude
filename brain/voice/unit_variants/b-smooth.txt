@@ -1,0 +1,2 @@
+# smooth pitch and loudness at the joins
+units.W_DUR = 0

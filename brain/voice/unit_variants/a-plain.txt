@@ -1,0 +1,3 @@
+# as before: plain joins, no length check
+units.PSOLA = 0
+units.W_DUR = 0

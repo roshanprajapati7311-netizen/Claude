@@ -22,10 +22,12 @@ class VoicePacks(context: Context, private val emit: (String, String) -> Unit) {
     companion object {
         const val BASE = "https://raw.githubusercontent.com/roshanprajapati7311-netizen/Claude/voice-pack/"
         const val ROBOT = "robot"
+        const val DEFAULT = "slt"
+        const val PACK_VERSION = 2 // packs with pitch marks: pitch and loudness are smoothed at every join
         val VOICES = listOf(
+            Voice("slt", "a woman's voice, American"),
             Voice("rms", "a man's voice, American"),
             Voice("ksp", "a man's voice, Indian English"),
-            Voice("slt", "a woman's voice, American"),
             Voice(ROBOT, "my old built-in robot voice"))
     }
 
@@ -35,7 +37,21 @@ class VoicePacks(context: Context, private val emit: (String, String) -> Unit) {
 
     fun file(id: String) = File(dir, "voice-$id.bin")
 
-    fun ready(id: String) = id == ROBOT || file(id).let { it.isFile && it.length() > 1_000_000 }
+    private fun accepted(id: String) = File(dir, "voice-$id.accepted")
+
+    /** The pack format version of a downloaded voice (0 if unreadable). */
+    private fun version(id: String): Int = try {
+        java.io.RandomAccessFile(file(id), "r").use { f ->
+            val b = ByteArray(8)
+            f.readFully(b)
+            if (b[0] != 'K'.code.toByte() || b[1] != 'V'.code.toByte()) 0
+            else (b[4].toInt() and 0xff) or ((b[5].toInt() and 0xff) shl 8) or ((b[6].toInt() and 0xff) shl 16) or ((b[7].toInt() and 0xff) shl 24)
+        }
+    } catch (e: Exception) { 0 }
+
+    /** On the phone and up to date (an older pack is fetched again once; if the server still has that one, it is kept). */
+    fun ready(id: String) = id == ROBOT || file(id).let { it.isFile && it.length() > 1_000_000 } &&
+        (version(id) >= PACK_VERSION || accepted(id).exists())
 
     fun load(id: String): KaivraUnits? = try { KaivraUnits.open(file(id)) } catch (e: Throwable) { null }
 
@@ -78,6 +94,7 @@ class VoicePacks(context: Context, private val emit: (String, String) -> Unit) {
                     target.delete()
                     if (!tmp.renameTo(target)) throw IOException("could not install voice")
                 }
+                if (version(id) >= PACK_VERSION) accepted(id).delete() else accepted(id).createNewFile()
                 ok = true
             } catch (e: Exception) {
                 File(dir, "voice-$id.bin.download").delete()

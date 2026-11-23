@@ -24,6 +24,15 @@ for s in $SPEAKERS; do
   [ -s "voice-$s.bin" ] || continue
   gzip -9 -c "voice-$s.bin" > "voice-$s.bin.gz"
   ls -la "voice-$s.bin" "voice-$s.bin.gz" | tee -a voices.txt
+  if [ "$s" = "${TUNE_SPEAKER:-slt}" ]; then
+    # the voice Kaivra uses by default: try every settings variant (scored later for clarity and naturalness)
+    for v in "$ROOT"/voice/unit_variants/*.txt; do
+      n=$(basename "$v" .txt); mkdir -p "wav_rec-$s-$n" "sample_rec-$s-$n"
+      KAIVRA_UNITS="voice-$s.bin" java -cp j com.kaivra.app.VoiceTest cmudict.dict "$ROOT/voice/sentences.txt" "wav_rec-$s-$n" 0 "$v" 2>&1 | tail -3
+      KAIVRA_UNITS="voice-$s.bin" java -cp j com.kaivra.app.VoiceTest cmudict.dict "$ROOT/voice/sample.txt" "sample_rec-$s-$n" 0 "$v" 2>&1 | tail -3
+    done
+    continue
+  fi
   mkdir -p "wav_rec-$s" "sample-$s"
   KAIVRA_UNITS="voice-$s.bin" java -cp j com.kaivra.app.VoiceTest cmudict.dict "$ROOT/voice/sentences.txt" "wav_rec-$s" 0 2>&1 | tail -5
   KAIVRA_UNITS="voice-$s.bin" java -cp j com.kaivra.app.VoiceTest cmudict.dict "$ROOT/voice/sample.txt" "sample-$s" 0 2>&1 | tail -5

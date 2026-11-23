@@ -72,4 +72,5 @@ if __name__ == "__main__":
     lines.append("\nWord accuracy (higher is clearer).\n\n| recognizer | voice | said | heard | errors |\n|---|---|---|---|---|")
     lines += detail
     open(out, "w").write("\n".join(lines) + "\n")
+    json.dump(mean, open(os.path.splitext(out)[0] + ".json", "w"), indent=1)
     print("\n".join(lines[:4 + len(systems)]))

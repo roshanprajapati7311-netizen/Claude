@@ -1,0 +1,2 @@
+units.KEEP = 80
+units.W_DUR = 2
