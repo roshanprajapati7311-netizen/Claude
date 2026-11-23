@@ -498,8 +498,8 @@ final class KaivraVoice {
     }
 
     // ---------------- tunable settings (tuned with the listening test in brain/voice) ----------------
-    static double PAR_GAIN = 0.3, TILT = 0.525, OQ = 0.6, BURST_GAIN = 1.421, ASP_AH = 0.819, HH_AH = 0.672, VOICE_BAR = 0;
-    static int VOT_STRESSED = 11, VOT_UNSTRESSED = 9, BURST_FRAMES = 2, SMOOTH_F1 = 4, SMOOTH_F23 = 5, SMOOTH_AV = 2, NASAL_SPREAD = 4, ONSET_RAMP = 5;
+    static double JITTER = 0.006, SHIMMER = 0.03, PAR_GAIN = 0.3, TILT = 0.525, OQ = 0.6, BURST_GAIN = 1.421, ASP_AH = 0.819, HH_AH = 0.672, VOICE_BAR = 0;
+    static int VOT_STRESSED = 11, VOT_UNSTRESSED = 9, BURST_FRAMES = 2, SMOOTH_F1 = 4, SMOOTH_F23 = 5, SMOOTH_AV = 2, NASAL_SPREAD = 4, ONSET_RAMP = 5, OVERSAMPLE = 1;
     static float V_STRESS1 = 0.72f, V_STRESS2 = 0.6f, V_STRESS0 = 0.45f, FINAL_LEN = 1.3f, CONS_LEN = 1.117f, CLUSTER = 0.85f;
     static float PAUSE_COMMA = 110, PAUSE_COLON = 170, PAUSE_END = 260, ACCENT_FIRST = 1.1f, ACCENT_LAST = 1.07f, DECLINE = 0.12f;
     static float F4 = 3350, F5 = 3850, FLAT_AB = 0, NASAL_ZERO_BW = 78.98f, PITCH = 0, SPEED = 0, CLOSURE_LEN = 0.75f;
@@ -606,8 +606,71 @@ final class KaivraVoice {
     /** Phoneme timing of the last synthesis (name, first 5 ms frame, frames), for checking. */
     String labels = "";
 
+    // ---------------- recorded voice (pieces of real speech, see KaivraUnits) ----------------
+
+    private volatile KaivraUnits units;
+
+    /** Uses a recorded voice pack from now on (null goes back to the built-in synthesizer). */
+    void setUnits(KaivraUnits u) { units = u; }
+
+    boolean hasRecordedVoice() { return units != null; }
+
+    private static int unitPhone(KaivraUnits u, String name) {
+        String p = name.toLowerCase(Locale.ROOT);
+        int id = u.phone(p);
+        if (id >= 0) return id;
+        switch (name) {
+            case "AX": return u.phone("ah");
+            case "AXR": return u.phone("er");
+            case "DX": return u.phone("t");
+            default: return -1;
+        }
+    }
+
+    private short[] speakRecorded(KaivraUnits u, String text) {
+        List<Seg> segs = segments(text);
+        List<KaivraUnits.Target> t = new ArrayList<>();
+        for (Seg s : segs) {
+            KaivraUnits.Target x = new KaivraUnits.Target();
+            if (s.ph == null) { x.ph = -1; x.pauseMs = Math.round(s.pause); t.add(x); continue; }
+            x.ph = unitPhone(u, s.ph.name);
+            if (x.ph < 0) return null;
+            x.stress = s.ph.kind == VOWEL ? Math.max(0, s.stress) : -1;
+            x.wordStart = s.wordStart;
+            t.add(x);
+        }
+        // word ends, and the first and last word of every phrase
+        for (int i = 0; i < t.size(); i++) {
+            KaivraUnits.Target x = t.get(i);
+            if (x.ph < 0) continue;
+            KaivraUnits.Target nx = i + 1 < t.size() ? t.get(i + 1) : null;
+            x.wordEnd = nx == null || nx.ph < 0 || nx.wordStart;
+        }
+        int a = 0;
+        while (a < t.size()) {
+            if (t.get(a).ph < 0) { a++; continue; }
+            int b = a;
+            while (b < t.size() && t.get(b).ph >= 0) b++;
+            int lastWord = a, secondWord = b;
+            for (int i = a; i < b; i++) if (t.get(i).wordStart) lastWord = i;
+            for (int i = a + 1; i < b; i++) if (t.get(i).wordStart) { secondWord = i; break; }
+            for (int i = a; i < b; i++) { t.get(i).phraseFinal = i >= lastWord; t.get(i).phraseInitial = i < secondWord; }
+            a = b;
+        }
+        return u.speak(t);
+    }
+
     /** Speech for the text as 16-bit PCM at 16 kHz. */
     synchronized short[] synthesize(String text) {
+        KaivraUnits rec = units;
+        if (rec != null) {
+            try {
+                short[] pcm = speakRecorded(rec, text);
+                if (pcm != null) return pcm;
+            } catch (RuntimeException e) {
+                // fall back to the built-in synthesizer
+            }
+        }
         float[] vp = VOICES[voice];
         float pitch = PITCH > 0 ? PITCH : vp[0], fs = vp[1], speed = SPEED > 0 ? SPEED : vp[2], breath = vp[3];
         List<Seg> segs = segments(text);
@@ -744,13 +807,18 @@ final class KaivraVoice {
                 // voice source: one glottal pulse per period (flow derivative 2x - 3x^2 over the open phase)
                 if (ph >= t0) {
                     ph -= t0;
-                    double f0 = Math.max(50, F0[fr]) * (1 + 0.006 * noise());
+                    double f0 = Math.max(50, F0[fr]) * (1 + JITTER * noise());
                     t0 = SR / f0;
-                    periodAmp = av * (1 + 0.03 * noise());
+                    periodAmp = av * (1 + SHIMMER * noise());
                 }
                 double te = OQ * t0, g = 0;
                 boolean open = ph < te;
-                if (open) { double x = ph / te; g = (2 * x - 3 * x * x) * periodAmp; }
+                // the pulse averaged over the sample, so its sharp closing edge lands at the exact time (no rough aliasing)
+                for (int q = 0; q < OVERSAMPLE; q++) {
+                    double t = ph + (q + 0.5) / OVERSAMPLE;
+                    if (t < te) { double x = t / te; g += 2 * x - 3 * x * x; }
+                }
+                g = g / OVERSAMPLE * periodAmp;
                 ph += 1;
                 tilt = TILT * tilt + (1 - TILT) * g;
                 double n = noise();
