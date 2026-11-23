@@ -126,14 +126,46 @@ public final class KaivraMind implements AutoCloseable {
     }
 
     private static final Pattern THINK_BLOCK = Pattern.compile("(?s)<think>.*?(</think>|$)");
-    private static final Pattern MARKS = Pattern.compile("[*#`_]{1,3}");
 
-    /** Removes anything the owner should not hear: thinking, markdown marks, control words, extra spaces. */
+    /** Removes what is not part of the answer: thinking, control words, bold marks, extra blank lines. Code stays as written. */
     static String clean(String s) {
         String t = THINK_BLOCK.matcher(s).replaceAll("");
-        t = t.replace("<|im_end|>", "").replace("<|endoftext|>", "").replace("</think>", "");
-        t = MARKS.matcher(t).replaceAll("");
-        return t.replaceAll("[ \\t]+", " ").replaceAll("\\n{3,}", "\n\n").trim();
+        t = t.replace("<|im_end|>", "").replace("<|endoftext|>", "").replace("</think>", "").replace("**", "");
+        return t.replaceAll("[ \\t]+\n", "\n").replaceAll("\\n{3,}", "\n\n").trim();
+    }
+
+    // ---------------- choosing how to answer ----------------
+
+    private static final Pattern CREATE = Pattern.compile(
+        "(?i)^\\s*(please\\s+)?(write|create|compose|make up|make me|draft|invent|imagine|tell me a (story|joke|poem)|"
+        + "give me (an? )?(idea|name|story|poem|joke|line|quote)s?)\\b|\\b(sunao|likho|shayari|kavita)\\b");
+    private static final Pattern RECENT = Pattern.compile(
+        "(?i)\\b(today|tonight|tomorrow|yesterday|right now|currently|current|latest|recent|recently|newest|upcoming|"
+        + "this (week|month|year|season)|last (week|month|year|night|match|season)|news|headlines?|weather|temperature|"
+        + "forecast|price|prices|cost of|exchange rate|stock|share price|scores?|won|winners?|wins|results?|election|elected|"
+        + "who is the (ceo|president|prime minister|chief minister|captain|owner|head|chairman)|release date|released|"
+        + "launched|trending|live|aaj|abhi|khabar|mausam|taza)\\b|\\b20(2[5-9]|[3-9][0-9])\\b");
+    private static final Pattern WORK_OUT = Pattern.compile(
+        "(?i)^\\s*(please\\s+)?(solve|calculate|compute|prove|work out|figure out|plan|find the)\\b|"
+        + "\\b(step by step|think it through|puzzle|riddle|logic)\\b");
+    private static final Pattern NUMBER_PROBLEM = Pattern.compile(
+        "(?i)(?=.*[0-9])(?=.*\\b(how (much|many|long|far|old)|total|altogether|per|each|every|average|percent|interest|"
+        + "profit|loss|speed|distance|times|divided|multiply|sum|difference|remaining|left over)\\b|.*%)");
+    private static final Pattern GAVE_UP = Pattern.compile(
+        "(?i)real[- ]time|my knowledge|knowledge cut|as of my|(don't|do not|cannot|can't) (have access|browse|access the internet|"
+        + "check)|(recommend|suggest) (you )?(search|check)|latest information|up-to-date information|not able to provide (current|live)");
+
+    /** "search", "think" or "" (let the brain decide), from the words of the question. */
+    static String route(String question) {
+        String q = question.trim();
+        if (CREATE.matcher(q).find()) return "";
+        if (RECENT.matcher(q).find()) return "search";
+        if (WORK_OUT.matcher(q).find() || NUMBER_PROBLEM.matcher(q).find()) return "think";
+        return "";
+    }
+
+    private static boolean isSignal(String text) {
+        return text.trim().toUpperCase(Locale.ROOT).matches("^(THINK|SEARCH)\\b.*");
     }
 
     // ---------------- generating ----------------
@@ -199,46 +231,64 @@ public final class KaivraMind implements AutoCloseable {
     public synchronized Answer answer(String question, List<String[]> history, String fact, Listener listener) {
         List<KaivraWeb.Found> sources = new ArrayList<>();
         if (handle == 0) return new Answer("", "none", sources);
+        String way = route(question);
+        if (way.equals("search")) return searched(question, question, history, listener, sources);
+        if (way.equals("think")) return thought(question, history, listener);
         if (fact != null && !fact.trim().isEmpty()) {
             String raw = generate(prompt(question, history, fact), ANSWER_TOKENS, 0.6f, listener);
             return new Answer(clean(raw), "library", sources);
         }
 
+        // let the brain decide: answer, SEARCH: query, or THINK
         String p1 = prompt(question, history, null);
         Gate gate = new Gate(listener);
         String raw1 = generate(p1, ANSWER_TOKENS, 0.6f, gate);
-
         if (gate.signal.equals("search")) {
             String line = raw1.replaceAll("^\\s+", "");
             int nl = line.indexOf('\n');
             String query = (nl >= 0 ? line.substring(0, nl) : line).replaceFirst("(?i)^SEARCH\\s*:?", "").trim();
-            if (query.isEmpty()) query = question;
-            String notes = KaivraWeb.notes(query, NOTES_CHARS, sources);
-            if (notes.isEmpty()) notes = "Nothing could be found online just now. Answer from what you know, and say if you are not sure.";
-            String p2 = p1 + raw1 + END + START + "user\n<tool_response>\n" + notes + "\n</tool_response>\n"
-                + "Answer my question from these notes, briefly." + END + REPLY;
-            String raw2 = generate(p2, ANSWER_TOKENS, 0.6f, listener);
-            return new Answer(clean(raw2), "search", sources);
+            return searched(question, query.isEmpty() ? question : query, history, listener, sources);
         }
-
-        if (gate.signal.equals("think")) {
-            String p2 = p1 + raw1 + END + START + "user\nWork it out step by step, then give me the answer." + END
-                + START + "assistant\n<think>\n";
-            String thought = generate(p2, THINK_TOKENS, 0.8f, null);
-            int close = thought.indexOf("</think>");
-            String spoken;
-            if (close >= 0 && !clean(thought.substring(close + 8)).isEmpty()) {
-                spoken = thought.substring(close + 8);
-                if (listener != null) listener.onText(spoken);
-            } else {
-                // thought for long enough (or stopped right after thinking): now say the answer
-                String p3 = p2 + thought + (close >= 0 ? "" : "\n</think>\n\n");
-                spoken = generate(p3, ANSWER_TOKENS, 0.6f, listener);
-            }
-            return new Answer(clean(spoken), "think", sources);
+        if (gate.signal.equals("think")) return thought(question, history, listener);
+        String text = clean(raw1);
+        if (GAVE_UP.matcher(text).find() || text.isEmpty() || isSignal(text)) {
+            // it did not know after all: look it up
+            return searched(question, question, history, listener, sources);
         }
+        return new Answer(text, "direct", sources);
+    }
 
-        return new Answer(clean(raw1), "direct", sources);
+    /** Searches the web for query, then answers the question from what was found. */
+    private Answer searched(String question, String query, List<String[]> history, Listener listener, List<KaivraWeb.Found> sources) {
+        String q = query.replaceAll("(?i)\\b(kaivra|please|can you|could you|tell me|do you know)\\b", " ").replaceAll("\\s+", " ").trim();
+        String notes = KaivraWeb.notes(q.isEmpty() ? question : q, NOTES_CHARS, sources);
+        if (notes.isEmpty()) {
+            notes = "Nothing could be found online just now (the phone may be offline). Answer from what you know, and say "
+                + "clearly that you could not check it online.";
+        }
+        String p = prompt(question, history, null);
+        p = p.substring(0, p.length() - REPLY.length())   // the question, then the notes as Kaivra's own lookup
+            + REPLY + "SEARCH: " + q + END + START + "user\n<tool_response>\n" + notes + "\n</tool_response>\n"
+            + "Answer my question from these notes, briefly. If they do not answer it, say so." + END + REPLY;
+        String raw = generate(p, ANSWER_TOKENS, 0.5f, listener);
+        return new Answer(clean(raw), "search", sources);
+    }
+
+    /** Thinks step by step (not spoken), then says the answer. */
+    private Answer thought(String question, List<String[]> history, Listener listener) {
+        String p = prompt(question, history, null);
+        p = p.substring(0, p.length() - REPLY.length()) + START + "assistant\n<think>\n";
+        String thinking = generate(p, THINK_TOKENS, 0.7f, null);
+        int close = thinking.indexOf("</think>");
+        String spoken = close >= 0 ? thinking.substring(close + 8) : "";
+        if (clean(spoken).isEmpty() || isSignal(clean(spoken))) {
+            // thought for long enough (or stopped right after thinking): now say the answer
+            String done = close >= 0 ? thinking.substring(0, close + 8) + "\n\n" : thinking + "\n</think>\n\n";
+            spoken = generate(p + done, ANSWER_TOKENS, 0.5f, listener);
+        } else if (listener != null) {
+            listener.onText(spoken);
+        }
+        return new Answer(clean(spoken), "think", new ArrayList<>());
     }
 
     /** Forgets the conversation held in the engine's memory. */
