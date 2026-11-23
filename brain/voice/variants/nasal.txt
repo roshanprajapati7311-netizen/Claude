@@ -1,4 +1,4 @@
-# softer nasal sounds
-M.av *= 0.7
-N.av *= 0.7
-NG.av *= 0.7
+# louder nasal sounds (as before)
+M.av *= 1.4
+N.av *= 1.4
+NG.av *= 1.4

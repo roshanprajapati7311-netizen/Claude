@@ -82,26 +82,26 @@ final class KaivraVoice {
         diph("AW", 700, 1250, 2550, 450, 900, 2350, 225);
         diph("OY", 560, 900, 2450, 380, 1850, 2500, 235);
         diph("OW", 560, 1000, 2400, 420, 850, 2350, 185);
-        cons("W", GLIDE, true, 300, 650, 2200, 60, 80, 150, 70, 0.75f, 0);
-        cons("Y", GLIDE, true, 270, 2150, 2950, 50, 150, 250, 65, 0.8f, 0);
+        cons("W", GLIDE, true, 300, 650, 2200, 60, 80, 150, 70, 0.757f, 0);
+        cons("Y", GLIDE, true, 270, 2150, 2950, 50, 150, 250, 59.13f, 0.8f, 0);
         cons("R", GLIDE, true, 330, 1100, 1450, 70, 100, 120, 70, 0.8f, 0);
         cons("L", GLIDE, true, 330, 1050, 2750, 60, 120, 250, 70, 0.8f, 0);
-        cons("M", NASAL, true, 450, 1000, 2200, 100, 200, 250, 75, 0.7f, 450);
-        cons("N", NASAL, true, 450, 1650, 2600, 100, 250, 300, 65, 0.7f, 450);
-        cons("NG", NASAL, true, 450, 2050, 2600, 100, 250, 300, 85, 0.7f, 450);
+        cons("M", NASAL, true, 450, 1000, 2200, 100, 200, 250, 75, 0.5f, 488.7f);
+        cons("N", NASAL, true, 450, 1650, 2600, 100, 250, 300, 65, 0.5f, 442.935f);
+        cons("NG", NASAL, true, 450, 2050, 2600, 100, 250, 300, 85, 0.5f, 457.65f);
         //                                                                 A2   A3   A4   A5   A6   AB
-        cons("F", FRIC, false, 340, 1100, 2200, 100, 120, 200, 100, 0, 0, -99, -99, -99, -99, 43, 42);
-        cons("TH", FRIC, false, 320, 1400, 2600, 100, 120, 200, 90, 0, 0, -99, -99, -99, 30, 36, 30);
+        cons("F", FRIC, false, 340, 1100, 2200, 100, 120, 200, 100, 0, 0, -99, -99, -99, -99, 47, 46);
+        cons("TH", FRIC, false, 320, 1400, 2600, 100, 120, 200, 90, 0, 0, -99, -99, -99, 34, 40, 34);
         cons("S", FRIC, false, 320, 1700, 2600, 100, 120, 200, 110, 0, 0, -99, -99, -99, 50, 66, -99);
-        cons("SH", FRIC, false, 320, 1850, 2400, 100, 120, 200, 120, 0, 0, -99, 71, 67, 62, 54, -99);
-        cons("V", FRIC, true, 340, 1100, 2200, 100, 120, 200, 65, 0.12f, 0, -99, -99, -99, -99, 36, 35);
+        cons("SH", FRIC, false, 320, 1850, 2400, 100, 120, 200, 128.88f, 0, 0, -99, 71, 67, 62, 54, -99);
+        cons("V", FRIC, true, 340, 1100, 2200, 100, 120, 200, 65, 0.149f, 0, -99, -99, -99, -99, 36, 35);
         cons("DH", FRIC, true, 320, 1400, 2600, 100, 120, 200, 50, 0.25f, 0, -99, -99, -99, 30, 34, 25);
         cons("Z", FRIC, true, 320, 1700, 2600, 100, 120, 200, 85, 0.2f, 0, -99, -99, -99, 47, 61, -99);
-        cons("ZH", FRIC, true, 320, 1850, 2400, 100, 120, 200, 80, 0.2f, 0, -99, 65, 61, 56, 50, -99);
+        cons("ZH", FRIC, true, 320, 1850, 2400, 100, 120, 200, 80, 0.2f, 0, -99, 63.917f, 59.917f, 54.917f, 48.917f, -99);
         cons("HH", ASP, false, 500, 1500, 2500, 200, 200, 250, 70, 0, 0);
-        cons("P", STOP, false, 220, 850, 2200, 100, 120, 200, 85, 0, 0, -99, -99, -99, -99, 45, 55);
-        cons("B", STOP, true, 220, 850, 2200, 100, 120, 200, 70, 0, 0, -99, -99, -99, -99, 40, 50);
-        cons("T", STOP, false, 220, 1750, 2650, 100, 120, 200, 75, 0, 0, -99, -99, 48, 56, 62, -99);
+        cons("P", STOP, false, 220, 850, 2200, 100, 120, 200, 85, 0, 0, -99, -99, -99, -99, 45.691f, 55.691f);
+        cons("B", STOP, true, 220, 850, 2200, 100, 120, 200, 70, 0, 0, -99, -99, -99, -99, 38.22f, 48.22f);
+        cons("T", STOP, false, 220, 1750, 2650, 100, 120, 200, 75.9f, 0, 0, -99, -99, 48, 56, 62, -99);
         cons("D", STOP, true, 220, 1750, 2650, 100, 120, 200, 65, 0, 0, -99, -99, 44, 52, 58, -99);
         cons("K", STOP, false, 220, 1900, 2400, 100, 120, 200, 80, 0, 0, 64, 70, 58, -99, -99, -99);
         cons("G", STOP, true, 220, 1900, 2400, 100, 120, 200, 70, 0, 0, 60, 66, 54, -99, -99, -99);
@@ -426,7 +426,7 @@ final class KaivraVoice {
         Seg next = i + 1 < segs.size() ? segs.get(i + 1) : null;
         if (next != null && next.ph == null) next = null;
         char place = "PB".contains(s.ph.name) ? 'L' : "TD".contains(s.ph.name) ? 'A' : 'V';
-        s.burstF = Math.max(1, (place == 'L' ? 2 : place == 'A' ? 3 : 4) - (s.ph.voiced ? 1 : 0) + BURST_FRAMES - 2);
+        s.burstF = Math.max(1, (place == 'L' ? 2 : place == 'A' ? 3 : 5) - (s.ph.voiced ? 1 : 0) + BURST_FRAMES - 2);
         int vot = 0;
         boolean afterS = prev != null && prev.ph != null && prev.ph.name.equals("S");
         if (next == null) vot = s.ph.voiced ? 0 : 2;
@@ -498,15 +498,15 @@ final class KaivraVoice {
     }
 
     // ---------------- tunable settings (tuned with the listening test in brain/voice) ----------------
-    static double PAR_GAIN = 0.31, TILT = 0.6, OQ = 0.6, BURST_GAIN = 1.4, ASP_AH = 0.6, HH_AH = 0.55, VOICE_BAR = 0.12;
-    static int VOT_STRESSED = 11, VOT_UNSTRESSED = 6, BURST_FRAMES = 2, SMOOTH_F1 = 4, SMOOTH_F23 = 5, SMOOTH_AV = 2, NASAL_SPREAD = 8;
-    static float V_STRESS1 = 0.72f, V_STRESS2 = 0.6f, V_STRESS0 = 0.45f, FINAL_LEN = 1.3f, CONS_LEN = 0.8f, CLUSTER = 0.85f;
-    static float PAUSE_COMMA = 110, PAUSE_COLON = 170, PAUSE_END = 260, ACCENT_FIRST = 1.10f, ACCENT_LAST = 1.07f, DECLINE = 0.12f;
-    static float F4 = 3350, F5 = 3850, NASAL_ZERO_BW = 100, PITCH = 0, SPEED = 0, CLOSURE_LEN = 0.75f;
+    static double PAR_GAIN = 0.3, TILT = 0.525, OQ = 0.6, BURST_GAIN = 1.421, ASP_AH = 0.819, HH_AH = 0.482, VOICE_BAR = 0.12;
+    static int VOT_STRESSED = 11, VOT_UNSTRESSED = 9, BURST_FRAMES = 2, SMOOTH_F1 = 4, SMOOTH_F23 = 5, SMOOTH_AV = 2, NASAL_SPREAD = 4, ONSET_RAMP = 5;
+    static float V_STRESS1 = 0.72f, V_STRESS2 = 0.6f, V_STRESS0 = 0.45f, FINAL_LEN = 1.3f, CONS_LEN = 0.798f, CLUSTER = 0.85f;
+    static float PAUSE_COMMA = 110, PAUSE_COLON = 170, PAUSE_END = 260, ACCENT_FIRST = 1.1f, ACCENT_LAST = 1.07f, DECLINE = 0.12f;
+    static float F4 = 3350, F5 = 3850, NASAL_ZERO_BW = 78.98f, PITCH = 0, SPEED = 0, CLOSURE_LEN = 0.75f;
 
     /**
      * Changes settings from text, one per line: "global.NAME = value" or "PHONEME.field = values"
-     * (fields: f, e, b = three formants; dur, av, zero; par = A2 A3 A4 A5 A6 AB in dB). "*=" multiplies and "+=" adds
+     * (fields: f, e, b = three formants; f1, f2, f3 = one formant; dur, av, zero; par = A2 A3 A4 A5 A6 AB in dB). "*=" multiplies and "+=" adds
      * (one value applies to every entry; silent par entries stay silent). Used by the listening test and the tuner.
      */
     static void tune(String spec) {
@@ -545,6 +545,13 @@ final class KaivraVoice {
                     }
                     case "e": ph.e1 = vec(op, ph.e1, x, 0); ph.e2 = vec(op, ph.e2, x, 1); ph.e3 = vec(op, ph.e3, x, 2); break;
                     case "b": ph.b1 = vec(op, ph.b1, x, 0); ph.b2 = vec(op, ph.b2, x, 1); ph.b3 = vec(op, ph.b3, x, 2); break;
+                    case "f1": case "f2": case "f3": {
+                        int k = field.charAt(1) - '1';
+                        boolean steady = ph.e1 == ph.f1 && ph.e2 == ph.f2 && ph.e3 == ph.f3;
+                        if (k == 0) ph.f1 = (float) apply(op, ph.f1, x[0]); else if (k == 1) ph.f2 = (float) apply(op, ph.f2, x[0]); else ph.f3 = (float) apply(op, ph.f3, x[0]);
+                        if (steady) { ph.e1 = ph.f1; ph.e2 = ph.f2; ph.e3 = ph.f3; }
+                        break;
+                    }
                     case "dur": ph.dur = (float) apply(op, ph.dur, x[0]); break;
                     case "av": ph.av = (float) apply(op, ph.av, x[0]); break;
                     case "zero": ph.zero = (float) apply(op, ph.zero, x[0]); break;
@@ -703,6 +710,12 @@ final class KaivraVoice {
         // smooth the vocal tract movements: formants slowly, loudness quickly
         F1 = smooth(F1, SMOOTH_F1); F2 = smooth(F2, SMOOTH_F23); F3 = smooth(F3, SMOOTH_F23);
         B1 = smooth(B1, 3); B2 = smooth(B2, 3); B3 = smooth(B3, 3);
+        for (int i = 0; i < segs.size(); i++) {
+            Seg s = segs.get(i);
+            boolean afterPause = i == 0 || segs.get(i - 1).ph == null;
+            if (s.ph == null || !afterPause || !(s.ph.kind == VOWEL || s.ph.kind == GLIDE || s.ph.kind == NASAL)) continue;
+            for (int k = 0; k < ONSET_RAMP && k < s.n; k++) AV[s.start + k] *= (k + 1f) / (ONSET_RAMP + 1f);
+        }
         AV = smooth(AV, SMOOTH_AV); AH = smooth(AH, 1);
         for (int fr = 0; fr < 2; fr++) FZ[fr] = 270;
         for (int fr = total - 6; fr < total; fr++) FZ[fr] = 270;
@@ -773,6 +786,7 @@ final class KaivraVoice {
     }
 
     private static float[] smooth(float[] a, int r) {
+        if (r <= 0) return a.clone();
         float[] o = new float[a.length];
         for (int i = 0; i < a.length; i++) {
             float s = 0; int n = 0;

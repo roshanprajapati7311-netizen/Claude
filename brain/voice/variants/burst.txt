@@ -1,2 +1,2 @@
-# stronger release bursts
-global.BURST_GAIN *= 1.6
+# shorter release bursts
+global.BURST_FRAMES += -1

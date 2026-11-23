@@ -35,7 +35,10 @@ SPACE = [
     ("global.FINAL_LEN", "*", 0.8, 1.3, 0.06, False), ("global.TILT", "+", -0.3, 0.25, 0.05, False),
     ("global.OQ", "+", -0.2, 0.15, 0.04, False), ("global.NASAL_ZERO_BW", "*", 0.5, 3.0, 0.3, False),
     ("global.F4", "*", 0.9, 1.12, 0.02, False), ("global.CLUSTER", "*", 0.8, 1.2, 0.05, False),
+    ("global.ONSET_RAMP", "+", -5, 6, 1.5, True),
 ]
+for p in ("P", "B", "T", "D", "M", "N", "L", "R", "W", "F", "V", "TH", "S", "SH"):
+    SPACE += [(p + ".f2", "*", 0.8, 1.25, 0.05, False)]  # where the tongue and lips point the formants
 for p in ("M", "N", "NG"):
     SPACE += [(p + ".av", "*", 0.4, 1.4, 0.1, False), (p + ".dur", "*", 0.7, 1.5, 0.1, False),
               (p + ".zero", "*", 0.7, 1.4, 0.06, False)]
@@ -63,10 +66,14 @@ def spec(params):
     return "\n".join(out) + "\n"
 
 
+WEIGHT = {s[0]: 1.0 for s in SPACE}  # settings whose changes helped get tried more often
+
+
 def mutate(params, scale):
     p = dict(params)
+    keys = list(WEIGHT)
     for _ in range(random.choice((1, 1, 2, 2, 3))):
-        key, op, lo, hi, step, whole = random.choice(SPACE)
+        key, op, lo, hi, step, whole = BY_KEY[random.choices(keys, weights=[WEIGHT[k] for k in keys])[0]]
         cur = p.get(key, ident(key))
         new = cur + random.gauss(0, step * scale)
         if whole:
@@ -164,10 +171,18 @@ def main():
         best_res = res
         print(f"start: practice accuracy {100 * res['acc']:.1f}%", flush=True)
         gen = tries = stale = 0
+        momentum = {}
         while time.time() < t_end:
             gen += 1
             scale = 1.0 if stale < 6 else 0.6 if stale < 15 else 1.5
             cands = [mutate(best, scale) for _ in range(n)]
+            if momentum:  # the last step helped: try going a bit further the same way
+                c = dict(best)
+                for k, d in momentum.items():
+                    lo, hi, whole = BY_KEY[k][2], BY_KEY[k][3], BY_KEY[k][5]
+                    v = best[k] + d
+                    c[k] = min(hi, max(lo, round(v) if whole else v))
+                cands[0] = c
             results = pool.map(evaluate, [(i, spec(c), PRACTICE, None) for i, c in enumerate(cands)])
             tries += len(cands)
             top = max((r for r in results if r[1] is not None), key=lambda r: r[1]["score"], default=None)
@@ -175,12 +190,16 @@ def main():
                 old = best
                 best, best_res = cands[top[0]], top[1]
                 changed = [k for k in best if abs(best[k] - old.get(k, ident(k))) > 1e-9]
+                momentum = {k: best[k] - old.get(k, ident(k)) for k in changed}
+                for k in changed:
+                    WEIGHT[k] += 1.0
                 line = f"try {tries}: {100 * best_res['acc']:.1f}% ({', '.join(f'{k} {BY_KEY[k][1]} {best[k]:.3g}' for k in changed)})"
                 log.append(line)
                 print(line, flush=True)
                 stale = 0
             else:
                 stale += 1
+                momentum = {}
             if gen % 10 == 0:
                 print(f"... {tries} tries, best practice accuracy {100 * best_res['acc']:.1f}%", flush=True)
     with open(os.path.join(WORK, "best.txt"), "w") as f:

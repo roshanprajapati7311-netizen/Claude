@@ -1,2 +1,3 @@
-# stronger hissing sounds
-global.PAR_GAIN *= 1.4
+# f and th as quiet as before
+F.par += -4
+TH.par += -2

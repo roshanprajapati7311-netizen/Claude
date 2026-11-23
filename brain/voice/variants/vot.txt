@@ -1,2 +1,2 @@
-# more breath after p, t, k
-global.ASP_AH *= 1.4
+# even more breath after p, t, k
+global.ASP_AH *= 1.3

@@ -1,3 +1,2 @@
-# shorter breath after p, t, k
-global.VOT_STRESSED += -3
-global.VOT_UNSTRESSED += -2
+# hard voice onset after silence (as before)
+global.ONSET_RAMP = 0

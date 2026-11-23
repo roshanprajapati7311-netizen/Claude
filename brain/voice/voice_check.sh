@@ -53,7 +53,7 @@ fi
 
 # [voice-search] in the commit message: Kaivra tunes its own voice for a while, then speaks a sample
 if git -C "$REPO_ROOT" log -1 --format=%B | grep -q "\[voice-search\]"; then
-  "$W/venv/bin/python" "$ROOT/voice/voice_search.py" "$W" "${SEARCH_MINUTES:-40}"
+  "$W/venv/bin/python" "$ROOT/voice/voice_search.py" "$W" "${SEARCH_MINUTES:-70}"
   rm -rf "$W"/try_* "$W"/tmp*
   mkdir -p "$W/sample"
   SET="$W/best.txt"; [ -s "$SET" ] || SET=-
