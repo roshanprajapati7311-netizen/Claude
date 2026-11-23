@@ -21,6 +21,11 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DCMAKE_BUILD_TYPE=Release")
+            }
+        }
     }
 
     buildFeatures {
@@ -30,6 +35,13 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+        }
+    }
+
+    // Kaivra's thinking brain: the bridge (src/main/cpp) and the llama.cpp engine (MIT licence), built for the phone
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
         }
     }
 

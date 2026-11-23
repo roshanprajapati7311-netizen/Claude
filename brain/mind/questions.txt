@@ -1,0 +1,15 @@
+# Questions for GitHub's test of Kaivra's thinking brain. "---" starts a new conversation; "question || note" adds
+# a note from the knowledge library.
+Hello Kaivra, who are you?
+What can you do for me?
+What is the capital of Australia?
+What is the weather in Kolkata today?
+Who won the most recent ICC Cricket World Cup?
+If I save 350 rupees a day, how much will I have after 12 weeks?
+Write a Python function that checks whether a word is a palindrome.
+Create a short motivational line for my morning.
+Tell me about the Hooghly River || The Hooghly River is a distributary of the Ganges in West Bengal, India, about 260 km long. Kolkata lies on its banks.
+---
+Mujhe dosti par ek chhoti si shayari sunao.
+Explain in simple words how a rocket reaches space.
+What is the latest news about artificial intelligence this week?
