@@ -2,8 +2,19 @@
 # Looks inside the free CMU ARCTIC voice recordings (Carnegie Mellon University, full 0.95 release) and writes what it finds.
 W="$1"; cd "$W" || exit 1
 for s in rms ksp slt; do
-  f="cmu_us_${s}_arctic-0.95-release.zip"
-  [ -d "cmu_us_${s}_arctic" ] || { curl -fsSL --retry 3 -o "$f" "http://www.speech.cs.cmu.edu/cmu_arctic/packed/$f" && ls -la "$f" && unzip -q "$f" && rm -f "$f"; } || echo "could not get $s"
+  for u in "http://www.speech.cs.cmu.edu/cmu_arctic/packed/cmu_us_${s}_arctic-0.95-release.tar.bz2" \
+           "http://festvox.org/cmu_arctic/cmu_arctic/packed/cmu_us_${s}_arctic-0.95-release.tar.bz2" \
+           "http://festvox.org/cmu_arctic/packed/cmu_us_${s}_arctic-0.95-release.tar.bz2" \
+           "http://www.festvox.org/cmu_arctic/cmu_arctic/packed/cmu_us_${s}_arctic-0.95-release.zip" \
+           "http://festvox.org/packed/festival/2.4/voices/festvox_cmu_us_${s}_cg.tar.gz"; do
+    [ -d "cmu_us_${s}_arctic" ] && break
+    f=$(basename "$u")
+    if curl -fsSL --retry 2 -o "$f" "$u"; then
+      echo "got $u"; ls -la "$f"
+      case "$f" in *.zip) unzip -q "$f" ;; *.bz2) tar xjf "$f" ;; *.gz) tar xzf "$f" ;; esac
+      rm -f "$f"
+    else echo "no $u"; fi
+  done
 done
 ls -la
 for d in cmu_us_*_arctic; do
