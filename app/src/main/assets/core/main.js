@@ -72,7 +72,8 @@
   }
   function keepAlive() {
     if (safety) clearTimeout(safety);
-    const ms = typebar.classList.contains('open') ? 120000 : native ? 30000 : 12000;
+    // while the thinking brain searches or thinks, wait for it (on the phone that can take a minute or two)
+    const ms = brain.waiting ? 240000 : typebar.classList.contains('open') ? 120000 : native ? 30000 : 12000;
     safety = setTimeout(() => { if (comp._activeT) sleep(false); }, ms);
   }
   const speakable = (text) => String(text).replace(/kaivra/gi, nameSay).replace(/\*\*|__|[*#`>~]/g, '');
@@ -200,10 +201,11 @@
     else openAccess(false);
   });
   accessPanel.addEventListener('click', (e) => { if (e.target === accessPanel) openAccess(false); });
-  // ---------- Kaivra's own parts: brain, knowledge library, hearing ----------
+  // ---------- Kaivra's own parts: thinking brain, small brain, knowledge library, hearing ----------
   let parts = {};
   const PARTS = [
-    ['brain', 'Brain', 'My own neural network, trained from zero'],
+    ['mind', 'Thinking brain', 'Open Qwen3.5 model, yours to keep: answers, searches the web, thinks things through'],
+    ['brain', 'Small brain', 'My own neural network, trained from zero'],
     ['library', 'Knowledge library', 'Facts from Simple English Wikipedia, offline'],
     ['hearing', 'Hearing', 'Offline speech recognition (open-source Vosk)']
   ];
@@ -245,7 +247,8 @@
     if (parts.error === 'offline') help.textContent = 'Could not reach GitHub. Check the internet connection and try again. After this, everything works offline.';
     else if (parts.error === 'notyet') help.textContent = 'My first training night has not finished yet. Try again a little later.';
     else if (parts.error === 'damaged') help.textContent = 'A download was damaged. Tap to try again.';
-    else help.textContent = 'Downloaded once from your own GitHub, then everything works offline. The brain trains every night; tap again to get the newest one.';
+    else if (parts.error === 'space') help.textContent = 'Not enough free space on the phone. The thinking brain needs about 1.5 GB.';
+    else help.textContent = 'Downloaded once from your own GitHub, then it works offline (searching the web needs the internet). The thinking brain is about 1.3 GB, so use Wi-Fi; if the download stops, tap again and it continues.';
   }
   $('parts-btn').addEventListener('click', () => {
     try { if (native && native.downloadPacks) native.downloadPacks(); } catch (e) {}
@@ -257,7 +260,8 @@
       awake(true);
       voice.heard = '';
       const got = parts.changed.split(',').filter(Boolean);
-      if (got.length) say(got.indexOf('brain') >= 0 ? 'My brain is ready. Ask me anything.' : 'My parts are ready.', false);
+      if (got.length) say(got.indexOf('mind') >= 0 ? 'My thinking brain is ready. Ask me anything, and I will look things up or think them through when I need to.'
+        : got.indexOf('brain') >= 0 ? 'My brain is ready. Ask me anything.' : 'My parts are ready.', false);
       else if (!parts.error) say('Everything is already up to date.', false);
     }
   }
@@ -393,7 +397,7 @@
   const pad = (n) => String(n).padStart(2, '0');
   const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const HELP = 'I can tell you the time, the date and the battery, open any app, call or text your contacts, go home, open notifications, lock the phone, take a screenshot, turn the torch on or off, change the volume, and show any part of my core. I can also answer questions from my own brain and knowledge library, and do simple sums. Say change voice to hear another voice, or stop when you are done.';
+  const HELP = 'I can tell you the time, the date and the battery, open any app, call or text your contacts, go home, open notifications, lock the phone, take a screenshot, turn the torch on or off, change the volume, and show any part of my core. Ask me anything else: when I know, I answer; when I do not, I search the web or think it through, and I can write, plan and create for you. Say change voice to hear another voice, or stop when you are done.';
   const CONTROL = {
     home: ['Going home.', true], back: ['Going back.', false], recents: ['Here are your recent apps.', true],
     notifications: ['Here are your notifications.', true], quicksettings: ['Here are your quick settings.', true],

@@ -52,9 +52,11 @@ import java.util.concurrent.atomic.AtomicInteger
  * Everything Kaivra thinks, says and hears is its own and runs on the phone:
  *  - voice: KaivraVoice + KaivraUnits (recorded voices built by Kaivra's own code from the free CMU ARCTIC
  *    recordings, downloaded once by VoicePacks; the built-in synthesizer speaks until one is on the phone)
- *  - brain: KaivraBrain (own neural network, trained from scratch every night on GitHub) + KaivraLibrary (own knowledge library)
+ *  - thinking brain: KaivraMind, the open Qwen3.5 model (Apache 2.0) run by the llama.cpp engine (MIT) through Kaivra's
+ *    own bridge; it answers what it knows, searches the web with KaivraWeb when it does not, and reasons step by step
+ *  - small brain: KaivraBrain (own neural network, trained from zero on GitHub) + KaivraLibrary (own knowledge library)
  *  - hearing: the open-source Vosk engine (offline)
- * Brain, library and hearing are downloaded once from this project's own GitHub release (Packs.kt).
+ * Brains, library and hearing are downloaded once from this project's own GitHub release (Packs.kt).
  */
 class MainActivity : Activity() {
 
@@ -80,6 +82,7 @@ class MainActivity : Activity() {
     private val brainExec = Executors.newSingleThreadExecutor()
     @Volatile private var brain: KaivraBrain? = null
     @Volatile private var library: KaivraLibrary? = null
+    @Volatile private var mind: KaivraMind? = null
     private val rng = Random()
 
     private lateinit var packs: Packs
@@ -307,6 +310,11 @@ class MainActivity : Activity() {
         brainExec.execute {
             brain = try { packs.brainFile()?.let { KaivraBrain(it) } } catch (e: Throwable) { null }
             library = try { packs.libraryFile()?.let { KaivraLibrary(it) } } catch (e: Throwable) { null }
+            val old = mind
+            mind = null
+            try { old?.close() } catch (e: Throwable) {}
+            // 4 threads: the phone's four fast cores
+            mind = try { packs.mindFile()?.let { KaivraMind.open(it.path, 4, KaivraMind.CONTEXT) } } catch (e: Throwable) { null }
             sendToPage("packs", packs.status().toString())
         }
     }
@@ -326,19 +334,26 @@ class MainActivity : Activity() {
                 }
                 val lib = library
                 val b = brain
+                val md = mind
                 val hit = lib?.lookup(question)
                 val fact = hit?.get(1)
                 var text = ""
-                if (b != null) {
+                if (md != null) {
+                    // the thinking brain: answers, searches the web, or thinks it through
+                    val ans = md.answer(question, history, fact, null)
+                    text = ans.text
+                    out.put("how", ans.how)
+                    if (ans.sources.isNotEmpty()) out.put("web", ans.sources[0].title)
+                } else if (b != null) {
                     text = b.reply(question, history, fact, rng)
                     if (fact != null && !KaivraLibrary.agrees(text, fact)) text = KaivraLibrary.answerFrom(fact)
                 } else if (fact != null) {
                     text = KaivraLibrary.answerFrom(fact)
                 }
                 if (text.isBlank()) {
-                    out.put("ok", false).put("error", if (b == null) "nobrain" else "empty")
+                    out.put("ok", false).put("error", if (b == null && md == null) "nobrain" else "empty")
                 } else {
-                    out.put("ok", true).put("text", text).put("source", hit?.get(0) ?: "").put("own", b != null)
+                    out.put("ok", true).put("text", text).put("source", hit?.get(0) ?: "").put("own", md != null || b != null)
                 }
             } catch (e: Throwable) {
                 out.put("ok", false).put("error", "brain")
@@ -709,6 +724,7 @@ class MainActivity : Activity() {
         stopHearing()
         stopSpeaking()
         try { hearingModel?.close() } catch (e: Throwable) {}
+        try { mind?.close() } catch (e: Throwable) {}
         speechExec.shutdownNow()
         brainExec.shutdownNow()
         webView.destroy()

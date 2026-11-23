@@ -15,13 +15,14 @@ import java.util.zip.ZipInputStream
 
 /**
  * Kaivra's own parts, downloaded once (and updated after each training night) from this project's
- * GitHub release "kaivra-packs": the brain (brain.bin), the knowledge library (library.bin) and the hearing model.
+ * GitHub release "kaivra-packs": the small brain (brain.bin), the knowledge library (library.bin), the hearing model
+ * and the thinking brain (mind.gguf, the open Qwen3.5 model, about 1.3 GB; its download continues where it stopped).
  * Everything is stored inside the app and works offline afterwards.
  */
 class Packs(private val activity: MainActivity, private val emit: (String, String) -> Unit) {
     companion object {
         const val BASE = "https://github.com/roshanprajapati7311-netizen/Claude/releases/download/kaivra-packs/"
-        val NAMES = listOf("brain", "library", "hearing")
+        val NAMES = listOf("mind", "brain", "library", "hearing")
     }
 
     private val prefs = activity.getSharedPreferences("kaivra", Context.MODE_PRIVATE)
@@ -32,6 +33,7 @@ class Packs(private val activity: MainActivity, private val emit: (String, Strin
 
     fun brainFile(): File? = File(dir, "brain.bin").takeIf { it.isFile && it.length() > 0 }
     fun libraryFile(): File? = File(dir, "library.bin").takeIf { it.isFile && it.length() > 0 }
+    fun mindFile(): File? = File(dir, "mind.gguf").takeIf { it.isFile && it.length() > 100_000_000 }
 
     /** The folder of the hearing model (the one that holds its "am" or "conf" folder). */
     fun hearingModelDir(): File? {
@@ -45,6 +47,7 @@ class Packs(private val activity: MainActivity, private val emit: (String, Strin
     private fun ready(name: String) = when (name) {
         "brain" -> brainFile() != null
         "library" -> libraryFile() != null
+        "mind" -> mindFile() != null
         else -> hearingModelDir() != null
     }
 
@@ -78,22 +81,49 @@ class Packs(private val activity: MainActivity, private val emit: (String, Strin
         }.start()
     }
 
+    /** packs.json (small brain, library, hearing) and mind.json (the thinking brain), whichever exist yet. */
     private fun fetchManifest(): JSONObject {
-        val m = JSONObject(String(get(BASE + "packs.json").use { it.readBytes() }, Charsets.UTF_8))
+        var found = false
+        val m = try {
+            JSONObject(String(get(BASE + "packs.json").use { it.readBytes() }, Charsets.UTF_8)).also { found = true }
+        } catch (e: IOException) {
+            if (e.message != "notyet") throw e
+            JSONObject()
+        }
+        try {
+            m.put("mind", JSONObject(String(get(BASE + "mind.json").use { it.readBytes() }, Charsets.UTF_8)))
+            found = true
+        } catch (e: IOException) {
+            if (e.message != "notyet") throw e
+        }
+        if (!found) throw IOException("notyet")
         manifest = m
         return m
     }
 
-    private fun get(url: String): InputStream {
+    /** Opens a download; from > 0 asks for the rest of a file (the answer is 206 if the server can continue it). */
+    private fun open(url: String, from: Long = 0): HttpURLConnection {
         val c = URL(url).openConnection() as HttpURLConnection
         c.connectTimeout = 20000
         c.readTimeout = 60000
         c.instanceFollowRedirects = true
         c.setRequestProperty("User-Agent", "Kaivra")
+        if (from > 0) c.setRequestProperty("Range", "bytes=$from-")
         val code = c.responseCode
         if (code == 404) throw IOException("notyet")
         if (code !in 200..299) throw IOException("HTTP $code")
-        return c.inputStream
+        return c
+    }
+
+    private fun get(url: String): InputStream = open(url).inputStream
+
+    private fun sha256(file: File): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        DigestInputStream(file.inputStream().buffered(1 shl 16), md).use { input ->
+            val buf = ByteArray(1 shl 16)
+            while (input.read(buf) >= 0) { /* reading feeds the digest */ }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
     }
 
     fun download() {
@@ -112,14 +142,21 @@ class Packs(private val activity: MainActivity, private val emit: (String, Strin
                 val total = todo.sumOf { m.getJSONObject(it).optLong("bytes") }
                 var done = 0L
                 var lastEmit = 0L
+                if (dir.usableSpace < total + 300_000_000L) throw IOException("space")
                 for (n in todo) {
                     val a = m.getJSONObject(n)
                     val tmp = File(dir, "$n.download")
-                    val md = MessageDigest.getInstance("SHA-256")
-                    DigestInputStream(get(BASE + a.getString("file")), md).use { input ->
-                        FileOutputStream(tmp).use { out ->
+                    // a big download that stopped half-way continues, if it is still the same version
+                    val partKey = "partial.$n"
+                    var have = if (tmp.isFile && prefs.getLong(partKey, -1) == a.optLong("version") && tmp.length() < a.optLong("bytes")) tmp.length() else 0L
+                    if (have == 0L) tmp.delete()
+                    prefs.edit().putLong(partKey, a.optLong("version")).apply()
+                    val c = open(BASE + a.getString("file"), have)
+                    if (have > 0 && c.responseCode != 206) have = 0L   // the server sent the whole file again
+                    c.inputStream.use { input ->
+                        FileOutputStream(tmp, have > 0).use { out ->
                             val buf = ByteArray(64 * 1024)
-                            var got = 0L
+                            var got = have
                             while (true) {
                                 val r = input.read(buf)
                                 if (r < 0) break
@@ -133,7 +170,7 @@ class Packs(private val activity: MainActivity, private val emit: (String, Strin
                             }
                         }
                     }
-                    val hash = md.digest().joinToString("") { "%02x".format(it) }
+                    val hash = sha256(tmp)
                     if (a.has("sha256") && !hash.equals(a.getString("sha256"), ignoreCase = true)) {
                         tmp.delete()
                         throw IOException("damaged")
@@ -146,18 +183,23 @@ class Packs(private val activity: MainActivity, private val emit: (String, Strin
                 }
                 lastError = ""
             } catch (e: Exception) {
-                lastError = when (e.message) { "notyet" -> "notyet"; "damaged" -> "damaged"; else -> "offline" }
+                lastError = when (e.message) { "notyet" -> "notyet"; "damaged" -> "damaged"; "space" -> "space"; else -> "offline" }
             } finally {
                 busy = false
             }
             if ("hearing" in changed) activity.hearingChanged()
-            if ("brain" in changed || "library" in changed) activity.loadBrain()
+            if ("brain" in changed || "library" in changed || "mind" in changed) activity.loadBrain()
             emit("packs", status().put("finished", true).put("changed", changed.joinToString(",")).toString())
         }.start()
     }
 
     private fun install(name: String, file: File) {
         when (name) {
+            "mind" -> {
+                val target = File(dir, "mind.gguf")
+                target.delete() // if the old one is open, it stays readable until it is closed
+                if (!file.renameTo(target)) throw IOException("could not install mind")
+            }
             "brain", "library" -> {
                 val target = File(dir, "$name.bin")
                 val fresh = File(dir, "$name.bin.new")
