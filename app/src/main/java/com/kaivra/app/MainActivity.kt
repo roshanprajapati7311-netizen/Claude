@@ -84,7 +84,7 @@ class MainActivity : Activity() {
 
     private lateinit var packs: Packs
     private lateinit var voicePacks: VoicePacks
-    @Volatile private var voiceId = "rms"
+    @Volatile private var voiceId = VoicePacks.DEFAULT
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -120,7 +120,7 @@ class MainActivity : Activity() {
         voice.setVoice(0)
         packs = Packs(this) { type, json -> sendToPage(type, json) }
         voicePacks = VoicePacks(this) { type, json -> sendToPage(type, json) }
-        useVoice(prefs.getString("voiceId", "rms") ?: "rms")
+        useVoice(prefs.getString("voice", VoicePacks.DEFAULT) ?: VoicePacks.DEFAULT)
         Thread {
             try {
                 assets.open("voice/cmudict.dict").use { voice.loadDictionary(it) }
@@ -192,8 +192,8 @@ class MainActivity : Activity() {
 
     /** Switches to one of Kaivra's voices: a recorded one (downloaded once) or the built-in robot voice. */
     private fun useVoice(id: String) {
-        voiceId = if (VoicePacks.VOICES.any { it.id == id }) id else "rms"
-        prefs.edit().putString("voiceId", voiceId).apply()
+        voiceId = if (VoicePacks.VOICES.any { it.id == id }) id else VoicePacks.DEFAULT
+        prefs.edit().putString("voice", voiceId).apply()
         val wanted = voiceId
         if (wanted == VoicePacks.ROBOT) { voice.setUnits(null); return }
         if (voicePacks.ready(wanted)) {
@@ -212,7 +212,7 @@ class MainActivity : Activity() {
 
     private fun voiceLabel(): String {
         val v = VoicePacks.VOICES.firstOrNull { it.id == voiceId } ?: VoicePacks.VOICES[0]
-        val extra = if (voicePacks.ready(v.id)) "" else ", which I am downloading now, about 50 megabytes. Until it arrives you will hear my old voice"
+        val extra = if (voicePacks.ready(v.id)) "" else ", which I am downloading now, about 45 megabytes. Until it arrives you will hear my old robot voice"
         return v.label + extra + ", voice " + (VoicePacks.VOICES.indexOf(v) + 1) + " of " + VoicePacks.VOICES.size
     }
 

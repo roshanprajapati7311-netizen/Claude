@@ -29,6 +29,11 @@ public final class KaivraUnits {
     private final int[] uUtt, uLeft, uRight;
     private final byte[] sL, sR, flags, cepL, cepR;
     private final java.nio.ByteBuffer audio; // mu-law samples (memory-mapped from the pack file on the phone)
+    final int version;
+    private java.nio.IntBuffer marks;        // version 2: pitch marks (position * 2 + voiced) of every sentence
+    private int[] markStart;
+    private final HashMap<Integer, float[]> durStats = new HashMap<>(); // per sound pair: mean, sd of log length
+    private float medianLf0;
     private final HashMap<Integer, int[]> byPair = new HashMap<>();
     private static final float[] MU = new float[256];
 
@@ -70,7 +75,7 @@ public final class KaivraUnits {
         byte[] magic = new byte[4];
         d.readFully(magic);
         if (magic[0] != 'K' || magic[1] != 'V' || magic[2] != 'U' || magic[3] != '1') throw new IOException("not a Kaivra voice pack");
-        i32(d); // version
+        version = i32(d);
         if (i32(d) != SR) throw new IOException("unexpected sample rate");
         int np = i32(d);
         name = str(d);
@@ -106,12 +111,48 @@ public final class KaivraUnits {
         int len = i32(d);
         if (channel != null) {
             audio = channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, pos[0], len);
+            if (version >= 2) {
+                long at = pos[0] + len;
+                java.nio.ByteBuffer mb = channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, at, channel.size() - at)
+                        .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                int total = mb.getInt();
+                markStart = new int[nu + 1];
+                for (int i = 0; i <= nu; i++) markStart[i] = mb.getInt();
+                java.nio.ByteBuffer rest = mb.slice().order(java.nio.ByteOrder.LITTLE_ENDIAN);
+                marks = rest.asIntBuffer();
+                if (marks.capacity() < total) { marks = null; markStart = null; }
+            }
         } else {
             byte[] a = new byte[len];
             d.readFully(a);
             audio = java.nio.ByteBuffer.wrap(a);
+            if (version >= 2) {
+                int total = i32(d);
+                markStart = new int[nu + 1];
+                for (int i = 0; i <= nu; i++) markStart[i] = i32(d);
+                int[] m = new int[total];
+                for (int i = 0; i < total; i++) m[i] = i32(d);
+                marks = java.nio.IntBuffer.wrap(m);
+            }
         }
+        // typical length of every sound pair (to avoid pieces that are much too long or short: often mislabelled)
+        int pau = phone("pau");
+        java.util.ArrayList<Float> lf0s = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<Integer, int[]> e : byPair.entrySet()) {
+            int[] us = e.getValue();
+            if (us.length < 4 || uL[us[0]] == pau || uR[us[0]] == pau) continue;
+            double sum = 0, sq = 0;
+            for (int u : us) { double l = Math.log(Math.max(40, uRight[u] - uLeft[u])); sum += l; sq += l * l; }
+            double mean = sum / us.length, sd = Math.sqrt(Math.max(1e-4, sq / us.length - mean * mean));
+            durStats.put(e.getKey(), new float[]{(float) mean, (float) Math.max(0.08, sd)});
+        }
+        for (int i = 0; i < n; i += 7) if (lf0L[i] != 0) lf0s.add((float) lf0L[i]);
+        java.util.Collections.sort(lf0s);
+        medianLf0 = lf0s.isEmpty() ? 0 : lf0s.get(lf0s.size() / 2);
     }
+
+    /** True when the pack carries pitch marks, so pitch and loudness can be smoothed across the joins. */
+    boolean smooth() { return marks != null && PSOLA != 0; }
 
     int phone(String p) { Integer i = phoneId.get(p); return i == null ? -1 : i; }
 
@@ -157,7 +198,13 @@ public final class KaivraUnits {
     // ---------------- choosing the pieces ----------------
 
     static float W_CONTEXT = 1.0f, W_STRESS = 1.5f, W_WORD = 1.0f, W_FINAL = 2.0f, W_INITIAL = 1.0f, W_JOIN = 1.0f;
+    static float W_SPEC = 1.0f, W_F0J = 5.0f, W_VOICING = 2.0f, W_EN = 0.08f;  // join: spectrum, pitch, voicing, loudness
+    static float W_DUR = 1.0f, DUR_FREE = 1.5f;   // pieces much longer or shorter than usual for their sounds
+    static float W_PITCH = 0.0f;                  // pieces far from the speaker's usual pitch
     static int KEEP = 40;
+    // joining: pitch-synchronous overlap-add that meets pitch and loudness half-way at every join
+    static int PSOLA = 1;
+    static float SPAN_MS = 50f, MAX_SHIFT = 0.3f, F0_SMOOTH = 1.0f, GAIN_SMOOTH = 1.0f;
 
     private float targetCost(int u, int pp, int nn, int stL, int stR, int fl) {
         float c = 0;
@@ -169,6 +216,18 @@ public final class KaivraUnits {
         if (((flags[u] ^ fl) & 2) != 0) c += W_FINAL;
         if (((flags[u] ^ fl) & 4) != 0) c += W_INITIAL;
         if (((flags[u] ^ fl) & 8) != 0) c += W_WORD * 0.5f;
+        if (W_DUR > 0) {
+            float[] st = durStats.get(uL[u] * 1024 + uR[u]);
+            if (st != null) {
+                float z = Math.abs(((float) Math.log(Math.max(40, uRight[u] - uLeft[u])) - st[0]) / st[1]);
+                if ((fl & 2) != 0 && uRight[u] - uLeft[u] > Math.exp(st[0])) z = Math.max(0, z - 1f); // phrase ends are longer
+                if (z > DUR_FREE) c += W_DUR * (z - DUR_FREE);
+            }
+        }
+        if (W_PITCH > 0 && medianLf0 != 0) {
+            if (lf0L[u] != 0) c += W_PITCH * Math.abs(lf0L[u] - medianLf0) / 1000f;
+            if (lf0R[u] != 0) c += W_PITCH * Math.abs(lf0R[u] - medianLf0) / 1000f;
+        }
         return c;
     }
 
@@ -178,11 +237,11 @@ public final class KaivraUnits {
         if (adjacent(a, b)) return 0;
         float d = 0;
         for (int k = 0; k < 13; k++) { float x = cepR[a * 13 + k] - cepL[b * 13 + k]; d += x * x; }
-        float c = (float) Math.sqrt(d) / 20f;
+        float c = W_SPEC * (float) Math.sqrt(d) / 20f;
         boolean va = lf0R[a] != 0, vb = lf0L[b] != 0;
-        if (va && vb) c += 5f * Math.abs(lf0R[a] - lf0L[b]) / 1000f;
-        else if (va != vb) c += 2f;
-        c += 0.08f * Math.abs(enR[a] - enL[b]) / 100f;
+        if (va && vb) c += W_F0J * Math.abs(lf0R[a] - lf0L[b]) / 1000f;
+        else if (va != vb) c += W_VOICING;
+        c += W_EN * Math.abs(enR[a] - enL[b]) / 100f;
         return c * W_JOIN;
     }
 
@@ -300,6 +359,91 @@ public final class KaivraUnits {
         return pos;
     }
 
+    // ---------------- joining with pitch marks (pack version 2) ----------------
+
+    private int markPos(int i) { return marks.get(i) >> 1; }
+
+    private boolean markVoiced(int i) { return (marks.get(i) & 1) != 0; }
+
+    /** The pitch mark of sentence utt nearest to sample p, or -1. */
+    private int nearestMark(int utt, int p) {
+        int lo = markStart[utt], hi = markStart[utt + 1] - 1;
+        if (hi < lo) return -1;
+        int a = lo, b = hi + 1;
+        while (a < b) { int m = (a + b) >>> 1; if (markPos(m) < p) a = m + 1; else b = m; }
+        if (a > hi) return hi;
+        if (a > lo && p - markPos(a - 1) <= markPos(a) - p) return a - 1;
+        return a;
+    }
+
+    /**
+     * Joins the chosen pieces one voice period at a time (pitch-synchronous overlap-add). At every join the pitch and
+     * the loudness of the two pieces meet half-way, changing gradually over SPAN_MS on each side, so the voice glides
+     * instead of jumping. Pieces that were next to each other in the recording are left exactly as recorded.
+     */
+    private int renderSmooth(int[] path, float[] out, int pos) {
+        int n = path.length;
+        float[] dF = new float[n], dE = new float[n], J = new float[n];
+        for (int i = 1; i < n; i++) {
+            int a = path[i - 1], b = path[i];
+            if (adjacent(a, b)) continue;
+            int ua = uUtt[a], ub = uUtt[b];
+            int ma = nearestMark(ua, uRight[a]), mb = nearestMark(ub, uLeft[b]);
+            float pa = 0, pb = 0;
+            if (ma > markStart[ua] && markVoiced(ma) && markVoiced(ma - 1)) pa = markPos(ma) - markPos(ma - 1);
+            if (mb >= 0 && mb + 1 < markStart[ub + 1] && markVoiced(mb) && markVoiced(mb + 1)) pb = markPos(mb + 1) - markPos(mb);
+            if (pa > 0 && pb > 0) dF[i] = Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, (float) Math.log(pb / pa))) * F0_SMOOTH;
+            float ea = enR[a] / 100f, eb = enL[b] / 100f;
+            if (ea > -40 && eb > -40) dE[i] = Math.max(-8f, Math.min(8f, eb - ea)) * GAIN_SMOOTH;
+        }
+        float span = Math.max(1f, SPAN_MS * SR / 1000f);
+        int t = pos;
+        for (int i = 0; i < n; i++) {
+            int u = path[i], utt = uUtt[u], left = uLeft[u], right = uRight[u];
+            int T = t;
+            J[i] = T;
+            float est = T;
+            for (int k = i + 1; k < Math.min(n, i + 5); k++) { est += uRight[path[k - 1]] - uLeft[path[k - 1]]; J[k] = est; }
+            int lo = markStart[utt], hi = markStart[utt + 1] - 1;
+            int guard = 0;
+            while (guard++ < 4000) {
+                int tau = left + (t - T);
+                if (tau >= right) break;
+                int m = nearestMark(utt, tau);
+                if (m < 0) break;
+                int A = markPos(m);
+                if (A >= right) break; // the rest belongs to the next piece
+                int l = m > lo ? A - markPos(m - 1) : 0;
+                int r = m < hi ? markPos(m + 1) - A : 0;
+                if (l <= 0) l = r;
+                if (r <= 0) r = l;
+                if (r <= 0) { l = 80; r = 80; }
+                l = Math.max(16, Math.min(400, l));
+                r = Math.max(16, Math.min(400, r));
+                float c = 0, gdb = 0;
+                for (int k = Math.max(1, i - 3); k < Math.min(n, i + 5); k++) {
+                    if (dF[k] == 0 && dE[k] == 0) continue;
+                    float dt = t - J[k];
+                    float phi = 1f - Math.abs(dt) / span;
+                    if (phi <= 0) continue;
+                    float sgn = dt < 0 ? 0.5f : -0.5f;
+                    c += sgn * dF[k] * phi;
+                    gdb += sgn * dE[k] * phi;
+                }
+                float g = gdb == 0 ? 1f : (float) Math.pow(10, gdb / 20);
+                for (int s = -l; s <= r; s++) {
+                    int o = t + s;
+                    if (o < 0 || o >= out.length) continue;
+                    float w = s < 0 ? 0.5f + 0.5f * (float) Math.cos(Math.PI * s / l) : 0.5f + 0.5f * (float) Math.cos(Math.PI * s / r);
+                    out[o] += g * w * sample(utt, A + s);
+                }
+                int step = markVoiced(m) && c != 0 ? Math.round(r * (float) Math.exp(c)) : r;
+                t += Math.max(16, step);
+            }
+        }
+        return t;
+    }
+
     /** Speech for the targets as 16-bit PCM, or null if some sound pair cannot be made from this pack. */
     short[] speak(List<Target> targets) {
         List<int[]> paths = new ArrayList<>();
@@ -323,10 +467,10 @@ public final class KaivraUnits {
             phrase.add(t);
         }
         if (paths.isEmpty()) return new short[0];
-        float[] out = new float[total + SR / 2];
+        float[] out = new float[total + total / 8 + SR / 2];
         int pos = 400;
         for (int k = 0; k < paths.size(); k++) {
-            pos = render(paths.get(k), out, pos);
+            pos = smooth() ? renderSmooth(paths.get(k), out, pos) : render(paths.get(k), out, pos);
             pos += pauses.get(k) * SR / 1000;
         }
         int end = Math.min(out.length, pos + 400);

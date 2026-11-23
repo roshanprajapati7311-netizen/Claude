@@ -15,6 +15,8 @@ SR = 16000
 PAU_KEEP = 960          # keep at most 60 ms of silence next to speech
 VOWELS = {"aa", "ae", "ah", "ao", "aw", "ax", "axr", "ay", "eh", "er", "ey", "ih", "ix", "iy", "ow", "oy", "uh", "uw"}
 SILENCE = {"pau", "h#", "ssil", "sil", "brth"}
+STOPS = {"p", "t", "k", "b", "d", "g", "ch", "jh"}   # joined inside their closure (the short silence before the burst)
+VERSION = 2   # 2: pitch marks with voicing stored after the audio
 
 
 def read_wav(path):
@@ -153,6 +155,89 @@ def edge_features(x, c):
     return cep[1:14], en, (np.log(f0) if f0 > 0 else 0.0), f0
 
 
+HOP = 80   # 5 ms analysis frames
+
+
+def frame_analysis(x):
+    """Per 5 ms frame (centre f*HOP + 200): 13 MFCCs, loudness (RMS) and voicing (autocorrelation peak)."""
+    n = max(1, (len(x) - 640) // HOP + 1)
+    pad = np.concatenate([x, np.zeros(1280)])
+    idx = np.arange(n)[:, None] * HOP + np.arange(400)[None, :]
+    fr = pad[idx]
+    pre = np.concatenate([fr[:, :1], fr[:, 1:] - 0.97 * fr[:, :-1]], axis=1) * HAM
+    spec = np.abs(np.fft.rfft(pre, 512, axis=1)) ** 2
+    cep = (np.log(spec @ FB.T + 1e-8) @ DCT.T)[:, 1:14]
+    rms = np.sqrt((fr ** 2).mean(axis=1))
+    # voicing on 40 ms around the same centre
+    idx2 = np.clip(np.arange(n)[:, None] * HOP - 120 + np.arange(640)[None, :], 0, len(pad) - 1)
+    w = pad[idx2]
+    w = (w - w.mean(axis=1, keepdims=True)) * np.hanning(640)
+    ps = np.abs(np.fft.rfft(w, 2048, axis=1)) ** 2
+    ac = np.fft.irfft(ps, axis=1)[:, :640]
+    hw = np.hanning(640)
+    win = np.correlate(hw, hw, "full")[639:]
+    ac = ac / (ac[:, :1] + 1e-12) / np.maximum(win / win[0], 1e-3)
+    lo, hi = SR // 400, SR // 60
+    peak = ac[:, lo:hi].max(axis=1)
+    voiced = (peak > 0.45) & (rms > 0.004)
+    return cep, rms, voiced
+
+
+def boundary(ph, a, b, cep, rms):
+    """Where to cut a sound: inside the closure for stop sounds, else at its steadiest point near the middle."""
+    def frames(p, q):
+        f0, f1 = int(np.ceil((p - 200) / HOP)), int(np.floor((q - 200) / HOP))
+        f0, f1 = max(1, f0), min(len(rms) - 2, f1)
+        return range(f0, f1 + 1) if f1 >= f0 else range(0)
+    if ph in STOPS:
+        fs = frames(a + (b - a) * 0.15, a + (b - a) * 0.65)
+        if len(fs):
+            f = min(fs, key=lambda k: rms[k])
+            return f * HOP + 200, True
+        return a + (b - a) // 3, True
+    fs = frames(a + (b - a) * 0.3, b - (b - a) * 0.3)
+    if len(fs) >= 2:
+        f = min(fs, key=lambda k: float(((cep[k + 1] - cep[k - 1]) ** 2).sum()))
+        return f * HOP + 200, False
+    return (a + b) // 2, False
+
+
+def mark_table(pms, voiced_frames, n, edges=()):
+    """Pitch marks of one stored sentence with a voicing bit; gaps (unvoiced parts) are filled every 5 ms.
+    Piece edges that are not on a mark become marks too, so every piece starts and ends exactly on one."""
+    pms = sorted(set(int(p) for p in pms if 0 <= p < n))
+    if len(edges):
+        arr = np.array(pms if pms else [-10 ** 6])
+        for e in edges:
+            e = int(e)
+            if 0 <= e < n and np.min(np.abs(arr - e)) > 20:
+                pms.append(e)
+        pms = sorted(set(pms))
+    filled = []
+    prev = 0
+    for p in pms + [n]:
+        gap = p - prev
+        if gap > 260:
+            k = int(round(gap / 80))
+            filled += [prev + int(round(gap * j / k)) for j in range(1, k)]
+        if p < n:
+            filled.append(p)
+        prev = p
+    if not filled or filled[0] != 0:
+        filled = [0] + filled
+    m = np.array(sorted(set(filled)), dtype=np.int64)
+    out = np.zeros(len(m), dtype=np.int64)
+    for i, p in enumerate(m):
+        f = int(round((p - 200) / HOP))
+        v = 0 <= f < len(voiced_frames) and voiced_frames[f]
+        l = p - m[i - 1] if i > 0 else 0
+        r = m[i + 1] - p if i + 1 < len(m) else 0
+        if v and (not (40 <= l <= 260) or not (40 <= r <= 260) or not (0.6 <= r / l <= 1.66)):
+            v = False
+        out[i] = p * 2 + (1 if v else 0)
+    return out
+
+
 # ---------------- words: stress and word positions from the CMU dictionary ----------------
 
 def load_dict(path):
@@ -263,7 +348,7 @@ def build(spk_dir, dict_path, out_path, name):
     utts = sorted(u for u in texts if os.path.exists(os.path.join(spk_dir, "lab", u + ".lab")))
     phones = ["pau"]
     pid = {"pau": 0}
-    units, audio, utt_table = [], [], []
+    units, audio, utt_table, marks = [], [], [], []
     cep_all = []
     offset = 0
     skipped = 0
@@ -300,6 +385,7 @@ def build(spk_dir, dict_path, out_path, name):
             return int(best) if best is not None else int(c)
 
         # the two edges of every sound: where a piece ending in it stops, where a piece starting with it begins
+        cep_f, rms_f, voiced_f = frame_analysis(x / max(1e-4, np.percentile(np.abs(x), 99)) * 0.5)
         edgeR, edgeL = [], []
         for s, e, ph in lab:
             a, b = int(s * SR), int(e * SR)
@@ -308,7 +394,8 @@ def build(spk_dir, dict_path, out_path, name):
                 edgeR.append(min(mid, a + PAU_KEEP))
                 edgeL.append(max(mid, b - PAU_KEEP))
             else:
-                m = snap(mid, a + (b - a) // 4, b - (b - a) // 4)
+                c, stop = boundary(ph, a, b, cep_f, rms_f)
+                m = snap(c, c - 60, c + 60) if stop else snap(c, a + (b - a) // 5, b - (b - a) // 5)
                 edgeR.append(m)
                 edgeL.append(m)
         first, last = edgeL[0], edgeR[-1]
@@ -323,6 +410,8 @@ def build(spk_dir, dict_path, out_path, name):
         mu = np.sign(clip) * np.log1p(255 * np.abs(clip)) / np.log(256)
         audio.append(np.round((mu + 1) / 2 * 255).astype(np.uint8))
         utt_table.append((offset, len(clip)))
+        vf = frame_analysis(clip)[2]
+        marks.append(mark_table(pms - lo, vf, len(clip), [e - lo for e in edgeL + edgeR]))
         offset += len(clip)
         xs = clip  # features from the stored (levelled) audio
         for k in range(len(lab) - 1):
@@ -359,7 +448,7 @@ def build(spk_dir, dict_path, out_path, name):
     with open(out_path, "wb") as f:
         f.write(b"KVU1")
         nm = name.encode()
-        f.write(struct.pack("<iii", 1, SR, len(phones)))
+        f.write(struct.pack("<iii", VERSION, SR, len(phones)))
         f.write(struct.pack("<B", len(nm)) + nm)
         for p in phones:
             b = p.encode()
@@ -380,7 +469,14 @@ def build(spk_dir, dict_path, out_path, name):
         blob = np.concatenate(audio) if audio else np.zeros(0, np.uint8)
         f.write(struct.pack("<i", len(blob)))
         f.write(blob.tobytes())
+        # version 2: pitch marks (position * 2 + voiced) of every sentence, after the audio
+        starts = np.cumsum([0] + [len(m) for m in marks]).astype("<i4")
+        f.write(struct.pack("<i", int(starts[-1])))
+        f.write(starts.tobytes())
+        f.write((np.concatenate(marks) if marks else np.zeros(0)).astype("<i4").tobytes())
     pairs = {(u["l"], u["r"]) for u in units}
+    allm = np.concatenate(marks) if marks else np.zeros(0, dtype=np.int64)
+    print(f"{name}: {len(allm)} pitch marks, {100.0 * (allm & 1).mean() if len(allm) else 0:.0f}% voiced")
     print(f"{name}: {len(utt_table)} sentences ({skipped} skipped), {offset / SR / 60:.1f} min kept, {len(units)} pieces, "
           f"{len(pairs)} different sound pairs, {len(phones)} sounds: {' '.join(phones)}")
 
