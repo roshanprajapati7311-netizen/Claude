@@ -277,17 +277,18 @@ final class KaivraBrain {
 
     /** history: pairs {question, answer}, oldest first. fact: text from the knowledge library, or null. */
     synchronized String reply(String question, List<String[]> history, String fact, Random rng) {
-        int maxNew = 90;
+        int maxNew = Math.min(90, ctx / 3);
         List<Integer> tail = new ArrayList<>();
+        List<Integer> qi = encode(question);
+        if (qi.size() > Math.min(60, ctx / 5)) qi = qi.subList(0, Math.min(60, ctx / 5));
         if (fact != null && !fact.isEmpty()) {
-            tail.add(FACT);
+            // the fact, the question and the answer must all fit in the brain's context
+            int factRoom = Math.min(140, ctx - maxNew - qi.size() - 5);
             List<Integer> f = encode(fact);
-            if (f.size() > 140) f = f.subList(0, 140);
-            tail.addAll(f);
+            if (f.size() > factRoom) f = f.subList(0, Math.max(0, factRoom));
+            if (!f.isEmpty()) { tail.add(FACT); tail.addAll(f); }
         }
         tail.add(USER);
-        List<Integer> qi = encode(question);
-        if (qi.size() > 60) qi = qi.subList(0, 60);
         tail.addAll(qi);
         tail.add(KAIVRA);
         List<List<Integer>> turns = new ArrayList<>();

@@ -5,3 +5,4 @@ plugins {
 
 apply(from = "build-report.gradle.kts")
 apply(from = "voice-test.gradle.kts")
+apply(from = "brain-train.gradle.kts")

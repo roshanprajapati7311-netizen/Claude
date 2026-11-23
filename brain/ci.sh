@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
-# Kaivra's nightly training on GitHub's free computers (run by .github/workflows/kaivra-brain.yml).
+# Kaivra's training on GitHub's free computers: nightly from .github/workflows/kaivra-brain.yml, or from the app
+# build when a commit message says [brain-train] (brain-train.gradle.kts).
 #  1. builds the training data and knowledge library from Simple English Wikipedia (only when needed)
 #  2. trains the brain, continuing from last night's checkpoint
 #  3. publishes brain, library and hearing to the "kaivra-packs" release, where the app downloads them
 #  4. writes the run's log to the brain-log branch
+# From the app build (Gradle hook, commit message says [brain-train]): use the token actions/checkout gave git
+if [ -z "${GH_TOKEN:-}" ]; then
+  H=$(git -C "$(dirname "$0")/.." config --get http.https://github.com/.extraheader 2>/dev/null || true)
+  if [ -n "$H" ]; then GH_TOKEN=$(printf '%s' "${H##* }" | base64 -d 2>/dev/null | cut -d: -f2- || true); export GH_TOKEN; fi
+fi
+RUN_NUMBER="${RUN_NUMBER:-${GITHUB_RUN_NUMBER:-0}}"
 set -eo pipefail
 if [ "${GITHUB_REF_NAME:-}" = "voice-lab" ]; then exec bash "$(dirname "$0")/voice/voice_check.sh"; fi
 REPO="${GITHUB_REPOSITORY:?}"
@@ -45,6 +52,7 @@ PY
 trap publish_log EXIT
 
 cd "$ROOT"
+python3 -m venv "$W/venv" && . "$W/venv/bin/activate"
 python3 -m pip install --quiet numpy
 python3 -c "import numpy; print('numpy', numpy.__version__)"
 nproc; free -g | head -2

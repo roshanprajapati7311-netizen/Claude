@@ -6,6 +6,6 @@
   "warmup_steps": 300,
   "ema": 0.999,
   "seed": 0,
-  "train_minutes": 25,
+  "train_minutes": 180,
   "data_version": 1
 }
