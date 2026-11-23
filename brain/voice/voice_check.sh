@@ -13,7 +13,7 @@ publish_report() {
   local entries="" name path blob
   for pair in "report.md:$W/voice-report.md" "app-build.txt:$W/app-build.txt" "run.txt:$W/voice-run.txt" \
               "search.md:$W/search.md" "best.txt:$W/best.txt" "best-settings.txt:$W/best-settings.txt" \
-              "sample.mp3.b64:$W/sample.mp3.b64" "sample-dict.txt:$W/sample-dict.txt"; do
+              "sample.mp3.b64:$W/sample.mp3.b64" "sample-dict.txt:$W/sample-dict.txt" "explore.txt:$W/explore.txt"; do
     name="${pair%%:*}"; path="${pair#*:}"
     [ -f "$path" ] || continue
     blob=$(git hash-object -w "$path")
@@ -29,6 +29,10 @@ trap publish_report EXIT
 exec > >(tee "$W/voice-run.txt") 2>&1
 
 cd "$W"
+if git -C "$REPO_ROOT" log -1 --format=%B | grep -q "\[voice-explore\]"; then
+  bash "$ROOT/voice/explore.sh" "$W" > "$W/explore.txt" 2>&1
+  exit 0
+fi
 if [ -z "$KAIVRA_FROM_GRADLE" ]; then bash "$ROOT/voice/app_check.sh" "$W" || true; fi
 python3 -m venv "$W/venv" && "$W/venv/bin/pip" install --quiet vosk || { echo "could not install vosk"; exit 1; }
 (sudo apt-get install -y -qq espeak-ng >/dev/null 2>&1 && echo "espeak-ng ready") || echo "no espeak-ng"
