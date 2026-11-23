@@ -1,14 +1,3 @@
-# combination
-global.VOT_STRESSED = 11
-global.VOT_UNSTRESSED = 7
-global.ASP_AH = 0.5
-global.BURST_FRAMES = 3
-global.BURST_GAIN = 2.0
-M.av = 0.45
-N.av = 0.45
-NG.av = 0.45
-M.dur = 90
-N.dur = 80
-global.SMOOTH_F1 = 3
-global.SMOOTH_F23 = 3
-global.SPEED = 0.9
+# shorter breath after p, t, k
+global.VOT_STRESSED += -3
+global.VOT_UNSTRESSED += -2

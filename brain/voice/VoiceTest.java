@@ -5,13 +5,17 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.List;
 
-/** Speaks every line of a text file with Kaivra's voice into WAV files (for the listening test). */
+/**
+ * Speaks every line of a text file with Kaivra's voice into WAV files (for the listening test).
+ * Arguments: dictionary (or -), sentences, output folder, voice number, [settings to apply (or -)], [file to save all settings].
+ */
 public class VoiceTest {
     public static void main(String[] a) throws Exception {
         KaivraVoice v = new KaivraVoice();
         if (!a[0].equals("-")) try (InputStream in = new FileInputStream(a[0])) { v.loadDictionary(in); }
         v.setVoice(Integer.parseInt(a[3]));
-        if (a.length > 4) KaivraVoice.tune(new String(Files.readAllBytes(Paths.get(a[4])), StandardCharsets.UTF_8));
+        if (a.length > 4 && !a[4].equals("-")) KaivraVoice.tune(new String(Files.readAllBytes(Paths.get(a[4])), StandardCharsets.UTF_8));
+        if (a.length > 5) Files.write(Paths.get(a[5]), KaivraVoice.settings().getBytes(StandardCharsets.UTF_8));
         List<String> lines = Files.readAllLines(Paths.get(a[1]), StandardCharsets.UTF_8);
         for (int i = 0; i < lines.size(); i++) {
             short[] pcm = v.synthesize(lines.get(i));

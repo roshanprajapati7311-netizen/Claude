@@ -1,6 +1,4 @@
-# stronger, longer nasals
-M.av = 0.45
-N.av = 0.45
-NG.av = 0.45
-M.dur = 90
-N.dur = 80
+# softer nasal sounds
+M.av *= 0.7
+N.av *= 0.7
+NG.av *= 0.7

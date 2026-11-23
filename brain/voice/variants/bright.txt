@@ -1,3 +1,2 @@
-# brighter, higher voice
-global.PITCH = 125
-global.TILT = 0.45
+# stronger hissing sounds
+global.PAR_GAIN *= 1.4

@@ -11,7 +11,9 @@ W="$REPO_ROOT/work"; mkdir -p "$W"; W="$(cd "$W" && pwd)"
 publish_report() {
   cd "$REPO_ROOT" || return
   local entries="" name path blob
-  for pair in "report.md:$W/voice-report.md" "app-build.txt:$W/app-build.txt" "run.txt:$W/voice-run.txt"; do
+  for pair in "report.md:$W/voice-report.md" "app-build.txt:$W/app-build.txt" "run.txt:$W/voice-run.txt" \
+              "search.md:$W/search.md" "best.txt:$W/best.txt" "best-settings.txt:$W/best-settings.txt" \
+              "sample.mp3.b64:$W/sample.mp3.b64" "sample-dict.txt:$W/sample-dict.txt"; do
     name="${pair%%:*}"; path="${pair#*:}"
     [ -f "$path" ] || continue
     blob=$(git hash-object -w "$path")
@@ -48,3 +50,18 @@ if command -v espeak-ng >/dev/null; then
   while IFS= read -r line; do espeak-ng -v en-us -s 165 -w "wav_espeak/$(printf %02d $i).wav" "$line"; i=$((i+1)); done < "$ROOT/voice/sentences.txt"
 fi
 "$W/venv/bin/python" "$ROOT/voice/voice_check.py" "$W" "$W/voice-report.md"
+
+# [voice-search] in the commit message: Kaivra tunes its own voice for a while, then speaks a sample
+if git -C "$REPO_ROOT" log -1 --format=%B | grep -q "\[voice-search\]"; then
+  "$W/venv/bin/python" "$ROOT/voice/voice_search.py" "$W" "${SEARCH_MINUTES:-40}"
+  rm -rf "$W"/try_* "$W"/tmp*
+  mkdir -p "$W/sample"
+  SET="$W/best.txt"; [ -s "$SET" ] || SET=-
+  java -cp j com.kaivra.app.VoiceTest "$DICT" "$ROOT/voice/sample.txt" "$W/sample" 0 "$SET"
+  command -v ffmpeg >/dev/null || sudo apt-get install -y -qq ffmpeg >/dev/null 2>&1
+  ffmpeg -y -loglevel error -i "$W/sample/00.wav" -codec:a libmp3lame -b:a 48k "$W/sample.mp3" && base64 -w0 "$W/sample.mp3" > "$W/sample.mp3.b64"
+  # pronunciations of the sample's words, so the same sample can be rebuilt elsewhere
+  tr 'A-Z' 'a-z' < "$ROOT/voice/sample.txt" | tr -c "a-z'\n" ' ' | tr ' ' '\n' | sort -u | while read -r w; do
+    [ -n "$w" ] && grep -m1 "^$w " cmudict.dict
+  done > "$W/sample-dict.txt" 2>/dev/null || true
+fi
