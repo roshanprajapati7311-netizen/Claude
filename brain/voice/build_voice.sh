@@ -5,7 +5,18 @@
 W="$1"; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; REPO_ROOT="$(cd "$ROOT/.." && pwd)"
 cd "$W" || exit 1
 SPEAKERS="${VOICE_SPEAKERS:-rms ksp slt}"
+: > voices.txt
+# [voice-reuse]: take the packs already on the voice-pack branch instead of building them again (faster tuning)
+if git -C "$REPO_ROOT" log -1 --format=%B | grep -q "\[voice-reuse\]"; then
+  SPEAKERS="${VOICE_SPEAKERS:-slt}"
+  for s in $SPEAKERS; do
+    curl -fsSL --retry 3 -o "voice-$s.bin.gz" "https://raw.githubusercontent.com/roshanprajapati7311-netizen/Claude/voice-pack/voice-$s.bin.gz" \
+      && gunzip -c "voice-$s.bin.gz" > "voice-$s.bin" && echo "reusing voice-$s.bin ($(stat -c %s "voice-$s.bin") bytes)" | tee -a voices.txt
+  done
+  REUSE=1
+fi
 for s in $SPEAKERS; do
+  [ -n "$REUSE" ] && break
   d="cmu_us_${s}_arctic"; f="$d-0.95-release.tar.bz2"
   [ -d "$d/lab" ] || { curl -fsSL --retry 3 -o "$f" "http://festvox.org/cmu_arctic/cmu_arctic/packed/$f" && tar xjf "$f" && rm -f "$f"; } || echo "could not get $s"
 done
@@ -16,14 +27,16 @@ done
   echo
   cat cmu_us_rms_arctic/COPYING 2>/dev/null
 } > VOICE-NOTICE.txt
-: > voices.txt
 for s in $SPEAKERS; do
   d="cmu_us_${s}_arctic"
-  [ -d "$d/lab" ] || continue
-  "$W/venv/bin/python" "$ROOT/voice/build_units.py" "$d" cmudict.dict "voice-$s.bin" "$s" 2>&1 | tail -3 | tee -a voices.txt
+  [ -n "$REUSE" ] || [ -d "$d/lab" ] || continue
+  if [ -z "$REUSE" ]; then
+    "$W/venv/bin/python" "$ROOT/voice/build_units.py" "$d" cmudict.dict "voice-$s.bin" "$s" 2>&1 | tail -3 | tee -a voices.txt
+    [ -s "voice-$s.bin" ] || continue
+    gzip -9 -c "voice-$s.bin" > "voice-$s.bin.gz"
+    ls -la "voice-$s.bin" "voice-$s.bin.gz" | tee -a voices.txt
+  fi
   [ -s "voice-$s.bin" ] || continue
-  gzip -9 -c "voice-$s.bin" > "voice-$s.bin.gz"
-  ls -la "voice-$s.bin" "voice-$s.bin.gz" | tee -a voices.txt
   if [ "$s" = "${TUNE_SPEAKER:-slt}" ]; then
     # the voice Kaivra uses by default: try every settings variant (scored later for clarity and naturalness)
     for v in "$ROOT"/voice/unit_variants/*.txt; do
@@ -42,6 +55,7 @@ for s in $SPEAKERS; do
   fi
 done
 # publish the packs (each well under GitHub's 100 MB file limit)
+[ -n "$REUSE" ] && exit 0
 cd "$REPO_ROOT" || exit 1
 entries=""
 for f in "$W"/voice-*.bin.gz "$W"/VOICE-NOTICE.txt; do

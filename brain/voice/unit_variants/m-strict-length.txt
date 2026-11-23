@@ -1,0 +1,2 @@
+units.W_DUR = 2
+units.DUR_FREE = 1.0

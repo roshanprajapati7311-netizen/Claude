@@ -1,0 +1,2 @@
+units.SPAN_MS = 120
+units.MAX_SHIFT = 0.5

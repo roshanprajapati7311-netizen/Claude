@@ -9,16 +9,18 @@ import numpy as np
 
 work, out = sys.argv[1], sys.argv[2]
 result, errors = {}, []
+os.environ.pop("GITHUB_TOKEN", None)  # torch.hub fails with "KeyError: 'Authorization'" when this is set
 try:
     import torch
     torch.set_num_threads(max(1, os.cpu_count() or 1))
     model = None
     for ref in ("tarepan/SpeechMOS:v1.2.0", "tarepan/SpeechMOS"):
         try:
-            model = torch.hub.load(ref, "utmos22_strong", trust_repo=True)
+            model = torch.hub.load(ref, "utmos22_strong", trust_repo=True, skip_validation=True)
             break
         except Exception as e:  # try the next one
-            errors.append(f"{ref}: {e}")
+            import traceback
+            errors.append(f"{ref}: {e!r} " + traceback.format_exc().strip().splitlines()[-3].strip())
     if model is None:
         raise RuntimeError("could not load UTMOS")
     model.eval()
