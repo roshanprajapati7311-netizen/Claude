@@ -16,7 +16,7 @@ import java.util.List;
  * recording join perfectly), then joins them in step with the voice's vibration so the seams are not heard.
  * The pieces come from a voice pack built by brain/voice/build_units.py from free recordings (CMU ARCTIC).
  */
-final class KaivraUnits {
+public final class KaivraUnits {
     static final int SR = 16000;
 
     final String name;
@@ -28,7 +28,7 @@ final class KaivraUnits {
     private final short[] uL, uR, uPP, uNN, perL, perR, lf0L, lf0R, enL, enR;
     private final int[] uUtt, uLeft, uRight;
     private final byte[] sL, sR, flags, cepL, cepR;
-    private final byte[] audio;
+    private final java.nio.ByteBuffer audio; // mu-law samples (memory-mapped from the pack file on the phone)
     private final HashMap<Integer, int[]> byPair = new HashMap<>();
     private static final float[] MU = new float[256];
 
@@ -50,9 +50,23 @@ final class KaivraUnits {
         return new String(b, "US-ASCII");
     }
 
-    /** Reads an uncompressed voice pack (the caller unzips it). */
-    KaivraUnits(InputStream raw) throws IOException {
-        DataInputStream d = new DataInputStream(new java.io.BufferedInputStream(raw, 1 << 16));
+    /** Opens an uncompressed voice pack file; the recorded sound stays in the file (memory-mapped), not in memory. */
+    static KaivraUnits open(java.io.File file) throws IOException {
+        try (java.io.RandomAccessFile f = new java.io.RandomAccessFile(file, "r")) {
+            return new KaivraUnits(new java.io.FileInputStream(f.getFD()), f.getChannel());
+        }
+    }
+
+    /** Reads an uncompressed voice pack from a stream (the caller unzips it). */
+    KaivraUnits(InputStream raw) throws IOException { this(raw, null); }
+
+    private KaivraUnits(InputStream raw, java.nio.channels.FileChannel channel) throws IOException {
+        final long[] pos = {0};
+        InputStream counted = new java.io.FilterInputStream(new java.io.BufferedInputStream(raw, 1 << 16)) {
+            @Override public int read() throws IOException { int b = super.read(); if (b >= 0) pos[0]++; return b; }
+            @Override public int read(byte[] b, int off, int len) throws IOException { int r = super.read(b, off, len); if (r > 0) pos[0] += r; return r; }
+        };
+        DataInputStream d = new DataInputStream(counted);
         byte[] magic = new byte[4];
         d.readFully(magic);
         if (magic[0] != 'K' || magic[1] != 'V' || magic[2] != 'U' || magic[3] != '1') throw new IOException("not a Kaivra voice pack");
@@ -90,8 +104,13 @@ final class KaivraUnits {
             byPair.put(e.getKey(), a);
         }
         int len = i32(d);
-        audio = new byte[len];
-        d.readFully(audio);
+        if (channel != null) {
+            audio = channel.map(java.nio.channels.FileChannel.MapMode.READ_ONLY, pos[0], len);
+        } else {
+            byte[] a = new byte[len];
+            d.readFully(a);
+            audio = java.nio.ByteBuffer.wrap(a);
+        }
     }
 
     int phone(String p) { Integer i = phoneId.get(p); return i == null ? -1 : i; }
@@ -241,7 +260,7 @@ final class KaivraUnits {
 
     private float sample(int utt, int i) {
         if (i < 0 || i >= uttLen[utt]) return 0;
-        return MU[audio[uttOff[utt] + i] & 0xff];
+        return MU[audio.get(uttOff[utt] + i) & 0xff];
     }
 
     private int halfWindow(int a, int b) {

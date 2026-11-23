@@ -50,7 +50,8 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * Kaivra — the home screen is the holographic core (assets/core).
  * Everything Kaivra thinks, says and hears is its own and runs on the phone:
- *  - voice: KaivraVoice (own speech synthesizer, written from scratch)
+ *  - voice: KaivraVoice + KaivraUnits (recorded voices built by Kaivra's own code from the free CMU ARCTIC
+ *    recordings, downloaded once by VoicePacks; the built-in synthesizer speaks until one is on the phone)
  *  - brain: KaivraBrain (own neural network, trained from scratch every night on GitHub) + KaivraLibrary (own knowledge library)
  *  - hearing: the open-source Vosk engine (offline)
  * Brain, library and hearing are downloaded once from this project's own GitHub release (Packs.kt).
@@ -82,6 +83,8 @@ class MainActivity : Activity() {
     private val rng = Random()
 
     private lateinit var packs: Packs
+    private lateinit var voicePacks: VoicePacks
+    @Volatile private var voiceId = "rms"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -114,8 +117,10 @@ class MainActivity : Activity() {
         setContentView(root)
         enterImmersive()
 
-        voice.setVoice(prefs.getInt("ownVoice", 0))
+        voice.setVoice(0)
         packs = Packs(this) { type, json -> sendToPage(type, json) }
+        voicePacks = VoicePacks(this) { type, json -> sendToPage(type, json) }
+        useVoice(prefs.getString("voiceId", "rms") ?: "rms")
         Thread {
             try {
                 assets.open("voice/cmudict.dict").use { voice.loadDictionary(it) }
@@ -185,7 +190,31 @@ class MainActivity : Activity() {
         try { currentTrack?.pause(); currentTrack?.flush() } catch (e: Exception) {}
     }
 
-    private fun voiceLabel(): String = KaivraVoice.VOICE_NAMES[voice.voice()] + ", voice " + (voice.voice() + 1) + " of " + KaivraVoice.VOICE_NAMES.size
+    /** Switches to one of Kaivra's voices: a recorded one (downloaded once) or the built-in robot voice. */
+    private fun useVoice(id: String) {
+        voiceId = if (VoicePacks.VOICES.any { it.id == id }) id else "rms"
+        prefs.edit().putString("voiceId", voiceId).apply()
+        val wanted = voiceId
+        if (wanted == VoicePacks.ROBOT) { voice.setUnits(null); return }
+        if (voicePacks.ready(wanted)) {
+            Thread { val u = voicePacks.load(wanted); if (voiceId == wanted) voice.setUnits(u) }.start()
+        } else {
+            voice.setUnits(null) // the built-in voice speaks until the recorded one is here
+            voicePacks.download(wanted) { ok ->
+                if (voiceId == wanted) {
+                    if (ok) voice.setUnits(voicePacks.load(wanted))
+                } else if (!voicePacks.ready(voiceId)) {
+                    mainHandler.post { useVoice(voiceId) } // the choice changed meanwhile: get that one
+                }
+            }
+        }
+    }
+
+    private fun voiceLabel(): String {
+        val v = VoicePacks.VOICES.firstOrNull { it.id == voiceId } ?: VoicePacks.VOICES[0]
+        val extra = if (voicePacks.ready(v.id)) "" else ", which I am downloading now, about 50 megabytes. Until it arrives you will hear my old voice"
+        return v.label + extra + ", voice " + (VoicePacks.VOICES.indexOf(v) + 1) + " of " + VoicePacks.VOICES.size
+    }
 
     // ---------- hearing (open-source Vosk, offline) ----------
 
@@ -471,11 +500,12 @@ class MainActivity : Activity() {
             }
         }
 
-        /** Switches to the next of Kaivra's own voices and remembers it; returns its name. */
+        /** Switches to the next of Kaivra's voices and remembers it; returns its name. */
         @JavascriptInterface
         fun nextVoice(): String {
-            voice.setVoice(voice.voice() + 1)
-            prefs.edit().putInt("ownVoice", voice.voice()).apply()
+            val list = VoicePacks.VOICES
+            val i = list.indexOfFirst { it.id == voiceId }
+            useVoice(list[(i + 1) % list.size].id)
             return voiceLabel()
         }
 

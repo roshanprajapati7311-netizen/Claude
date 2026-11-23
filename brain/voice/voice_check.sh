@@ -15,7 +15,8 @@ publish_report() {
               "search.md:$W/search.md" "best.txt:$W/best.txt" "best-settings.txt:$W/best-settings.txt" \
               "sample.mp3.b64:$W/sample.mp3.b64" "sample-dict.txt:$W/sample-dict.txt" "explore.txt:$W/explore.txt" \
               "voices.txt:$W/voices.txt" "sample-rms.mp3.b64:$W/sample-rms.mp3.b64" "sample-ksp.mp3.b64:$W/sample-ksp.mp3.b64" \
-              "sample-slt.mp3.b64:$W/sample-slt.mp3.b64"; do
+              "sample-slt.mp3.b64:$W/sample-slt.mp3.b64" "sample-rms.mp3:$W/sample-rms.mp3" "sample-ksp.mp3:$W/sample-ksp.mp3" \
+              "sample-slt.mp3:$W/sample-slt.mp3"; do
     name="${pair%%:*}"; path="${pair#*:}"
     [ -f "$path" ] || continue
     blob=$(git hash-object -w "$path")
