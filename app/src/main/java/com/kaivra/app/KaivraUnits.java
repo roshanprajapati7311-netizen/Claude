@@ -199,9 +199,9 @@ public final class KaivraUnits {
 
     static float W_CONTEXT = 1.0f, W_STRESS = 1.5f, W_WORD = 1.0f, W_FINAL = 2.0f, W_INITIAL = 1.0f, W_JOIN = 1.0f;
     static float W_SPEC = 1.0f, W_F0J = 5.0f, W_VOICING = 2.0f, W_EN = 0.08f;  // join: spectrum, pitch, voicing, loudness
-    static float W_DUR = 1.0f, DUR_FREE = 1.5f;   // pieces much longer or shorter than usual for their sounds
+    static float W_DUR = 2.0f, DUR_FREE = 1.5f;   // pieces much longer or shorter than usual for their sounds
     static float W_PITCH = 0.0f;                  // pieces far from the speaker's usual pitch
-    static int KEEP = 40;
+    static int KEEP = 80;                         // candidates kept per join (picked by the naturalness test)
     // joining: pitch-synchronous overlap-add that meets pitch and loudness half-way at every join
     static int PSOLA = 1;
     static float SPAN_MS = 50f, MAX_SHIFT = 0.3f, F0_SMOOTH = 1.0f, GAIN_SMOOTH = 1.0f;
