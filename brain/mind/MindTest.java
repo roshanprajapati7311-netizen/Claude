@@ -46,8 +46,13 @@ public class MindTest {
                 for (String why : KaivraWeb.trouble) System.out.printf("- trouble: %s%n", why);
                 KaivraWeb.trouble.clear();
             }
+            if (ans.skill != null) System.out.printf("- skill: %s%n", ans.skill);
+            if (ans.how.equals("rule") || ans.how.equals("note")) {
+                String[] o = m.owner();
+                System.out.printf("- memory: owner %s / %s; rules %s; notes %s%n", o[0], o[1], m.rules(), m.notes());
+            }
             for (KaivraWeb.Found f : ans.sources) System.out.printf("- source: %s, %s%n", f.title, f.url);
-            if (!ans.sources.isEmpty() || ans.how.equals("search")) System.out.println();
+            if (!ans.sources.isEmpty() || ans.how.equals("search") || ans.skill != null || ans.how.equals("rule") || ans.how.equals("note")) System.out.println();
             hist.add(new String[]{q, ans.text});
             if (hist.size() > 4) hist.remove(0);
         }
