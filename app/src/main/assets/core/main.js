@@ -260,7 +260,7 @@
       awake(true);
       voice.heard = '';
       const got = parts.changed.split(',').filter(Boolean);
-      if (got.length) say(got.indexOf('mind') >= 0 ? 'My thinking brain is ready. Ask me anything, and I will look things up or think them through when I need to.'
+      if (got.length) say(got.indexOf('mind') >= 0 ? 'My thinking brain is ready. Ask me anything, and I will look things up or think them through when I need to. If you have not yet, tell me your name: say my name is, and your name.'
         : got.indexOf('brain') >= 0 ? 'My brain is ready. Ask me anything.' : 'My parts are ready.', false);
       else if (!parts.error) say('Everything is already up to date.', false);
     }
@@ -311,6 +311,174 @@
     return true;
   }
 
+  // ---------- skills: routines the owner teaches and plugins from the owner's GitHub ----------
+  const norm = (x) => String(x || '').toLowerCase().replace(/[.,!?'"]/g, ' ').replace(/\s+/g, ' ').trim();
+  const skills = { list: [], compiled: [] };
+  const http = { id: 0, wait: {} };
+  function httpGet(url) {
+    return new Promise((ok, fail) => {
+      if (!native || !native.httpGet) { fetch(url).then((r) => r.text()).then(ok, fail); return; }
+      const id = ++http.id;
+      http.wait[id] = { ok, fail };
+      try { native.httpGet(id, String(url)); } catch (e) { delete http.wait[id]; fail(e); }
+    });
+  }
+  function onHttp(json) {
+    let r = {};
+    try { r = JSON.parse(json); } catch (e) {}
+    const w = http.wait[r.id];
+    if (!w) return;
+    delete http.wait[r.id];
+    if (r.ok) w.ok(r.text); else w.fail(new Error(r.error || 'offline'));
+  }
+  const nat = (name, ...args) => { try { return native && native[name] ? native[name](...args) : undefined; } catch (e) { return undefined; } };
+  // what a plugin may use: speaking, the brain, the web (https), its own storage and the phone actions Kaivra already has
+  function skillApi(sk, triggers) {
+    return {
+      on(patterns, fn) {
+        (Array.isArray(patterns) ? patterns : [patterns]).forEach((p) => {
+          const test = p instanceof RegExp ? (t, raw) => raw.match(p)
+            : ((q) => (t) => (t === q || (' ' + t + ' ').includes(' ' + q + ' ')) ? [t] : null)(norm(p));
+          triggers.push({ test, run: fn });
+        });
+      },
+      say: (text) => say(String(text), !voice.typed),
+      ask: (q) => askBrain(String(q), voice.typed),
+      fetch: (url) => httpGet(url),
+      get: (k, d) => store.get('skill.' + sk.name + '.' + k, d),
+      set: (k, v) => store.set('skill.' + sk.name + '.' + k, v),
+      open: (app) => nat('openApp', String(app), false),
+      call: (who) => nat('call', String(who)),
+      text: (who, msg) => nat('text', String(who), String(msg || '')),
+      torch: (on) => nat('torch', !!on),
+      volume: (up) => { nat('volume', up ? 1 : -1); nat('volume', up ? 1 : -1); },
+      phone: (action) => nat('control', String(action)),
+      web: (url) => nat('openUrl', String(url)),
+      vibrate: (ms) => buzz(ms || 30),
+      battery: () => nat('battery')
+    };
+  }
+  function loadSkills() {
+    let list = [];
+    try { list = JSON.parse(native && native.skills ? native.skills() : store.get('skills', '[]')) || []; } catch (e) { list = []; }
+    skills.list = list;
+    skills.compiled = [];
+    list.forEach((sk) => {
+      if (sk.kind === 'plugin' && sk.code) {
+        const triggers = [];
+        try { new Function('kaivra', sk.code)(skillApi(sk, triggers)); sk.broken = ''; } catch (e) { sk.broken = String(e && e.message || e); }
+        triggers.forEach((tr) => skills.compiled.push({ skill: sk, test: tr.test, run: tr.run }));
+      } else if (Array.isArray(sk.says) && Array.isArray(sk.steps)) {
+        const says = sk.says.map(norm).filter(Boolean);
+        skills.compiled.push({ skill: sk, test: (t) => (says.some((p) => t === p || t === 'kaivra ' + p) ? [t] : null), run: () => runSteps(sk.steps) });
+      }
+    });
+  }
+  function saveSkillList() {
+    const json = JSON.stringify(skills.list.map((sk) => { const c = Object.assign({}, sk); delete c.broken; return c; }));
+    if (native && native.saveSkills) nat('saveSkills', json); else store.set('skills', json);
+    loadSkills();
+  }
+  function addSkill(sk) {
+    sk.kind = 'routine'; sk.source = 'owner';
+    skills.list = skills.list.filter((x) => norm(x.name) !== norm(sk.name));
+    skills.list.push(sk);
+    saveSkillList();
+  }
+  const pause = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  async function runSteps(steps) {
+    const spoken = [];
+    let question = '';
+    for (const st of steps) {
+      const d = st.do;
+      if (d === 'say') spoken.push(String(st.text || ''));
+      else if (d === 'open') nat('openApp', String(st.app || ''), false);
+      else if (d === 'call') nat('call', String(st.who || ''));
+      else if (d === 'text') nat('text', String(st.who || ''), String(st.message || ''));
+      else if (d === 'torch') nat('torch', !!st.on);
+      else if (d === 'volume') { nat('volume', st.up ? 1 : -1); nat('volume', st.up ? 1 : -1); }
+      else if (d === 'phone') nat('control', String(st.action || ''));
+      else if (d === 'web') nat('openUrl', String(st.url || ''));
+      else if (d === 'wait') await pause(Math.min(600, Number(st.seconds) || 1) * 1000);
+      else if (d === 'ask') question = String(st.question || '');
+      await pause(250);
+    }
+    if (question) setTimeout(() => askBrain(question, voice.typed), spoken.length ? 2500 : 50);
+    return spoken.join(' ') || (question ? '' : 'Done.');
+  }
+  function runSkill(c, raw, m, typed) {
+    voice.mode = 'thinking'; keepAlive(); comp._paint();
+    const failed = (e) => say('My ' + c.skill.name + ' skill did not work: ' + (e && e.message || e) + '.', !typed);
+    let out;
+    try { out = c.run(raw, m); } catch (e) { failed(e); return; }
+    Promise.resolve(out).then((r) => {
+      if (typeof r === 'string' && r) say(r, !typed);
+      else if (voice.mode === 'thinking') { voice.mode = 'idle'; comp._paint(); }
+    }).catch(failed);
+  }
+  function onSkills(json) {
+    let r = {};
+    try { r = JSON.parse(json); } catch (e) {}
+    loadSkills();
+    if (!comp._activeT) return;
+    if (r.ok) say('I now have ' + skills.list.length + ' skill' + (skills.list.length === 1 ? '' : 's') + ': ' + skills.list.map((x) => x.name).join(', ') + '.', false);
+    else say(r.error === 'none' ? 'There are no plugins on your GitHub yet.' : 'I could not reach your GitHub. Check the internet and try again.', false);
+  }
+
+  // ---------- Kaivra's memory, shown in its structure ----------
+  let memPanel = null;
+  function memoryData() {
+    let m = {};
+    try { m = JSON.parse(native && native.memory ? native.memory() : '{}') || {}; } catch (e) { m = {}; }
+    return { owner: m.owner || {}, rules: m.rules || [], notes: m.notes || [] };
+  }
+  function showMemory(open) {
+    if (!open) { if (memPanel) memPanel.remove(); memPanel = null; return; }
+    if (!memPanel) {
+      memPanel = document.createElement('div');
+      memPanel.style.cssText = 'position:fixed;inset:0;z-index:60;background:rgba(5,3,2,.94);overflow:auto;padding:28px 20px 40px;'
+        + 'font-family:inherit;color:#e8f6f3;-webkit-overflow-scrolling:touch';
+      memPanel.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-kind]');
+        if (b) {
+          const kind = b.getAttribute('data-kind'), i = Number(b.getAttribute('data-i'));
+          if (kind === 'skills') { skills.list.splice(i, 1); saveSkillList(); } else nat('forget', kind, i);
+          showMemory(true);
+        } else if (e.target.closest('[data-close]')) showMemory(false);
+      });
+      document.body.appendChild(memPanel);
+    }
+    const m = memoryData();
+    const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const row = (text, kind, i, sub) => '<div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid rgba(79,216,196,.15)">'
+      + '<div style="flex:1;font-size:15px;line-height:1.4">' + esc(text) + (sub ? '<div style="opacity:.55;font-size:12px;margin-top:2px">' + esc(sub) + '</div>' : '') + '</div>'
+      + '<button data-kind="' + kind + '" data-i="' + i + '" aria-label="Forget this" style="background:none;border:1px solid rgba(79,216,196,.35);'
+      + 'color:' + ACCENT + ';border-radius:8px;padding:4px 10px;font-size:12px">FORGET</button></div>';
+    const section = (title, items, empty) => '<div style="margin-top:22px"><div style="letter-spacing:.2em;font-size:12px;color:' + ACCENT + '">'
+      + title + '</div>' + (items.length ? items.join('') : '<div style="opacity:.5;font-size:14px;padding:10px 0">' + empty + '</div>') + '</div>';
+    const who = [];
+    if (m.owner.name) who.push(row('Name: ' + m.owner.name + (m.owner.call ? ' (I call you ' + m.owner.call + ')' : ''), 'owner', 0));
+    else if (m.owner.call) who.push(row('I call you ' + m.owner.call, 'owner', 0));
+    memPanel.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center">'
+      + '<div style="letter-spacing:.3em;font-size:16px;color:' + ACCENT + '">KAIVRA&#39;S MEMORY</div>'
+      + '<button data-close="1" style="background:none;border:1px solid rgba(79,216,196,.4);color:' + ACCENT + ';border-radius:10px;padding:6px 14px">CLOSE</button></div>'
+      + '<div style="opacity:.6;font-size:13px;margin-top:8px">Kept only on this phone. Only you can change it.</div>'
+      + section('YOU', who, 'Say: my name is, and your name.')
+      + section('RULES I FOLLOW', m.rules.map((r, i) => row(r, 'rules', i)), 'Say: from now on, always, or never.')
+      + section('THINGS I REMEMBER', m.notes.map((r, i) => row(r, 'notes', i)), 'Say: remember that...')
+      + section('SKILLS', skills.list.map((x, i) => row(x.name, 'skills', i, x.source === 'github' ? 'Plugin from your GitHub' + (x.broken ? ', not working: ' + x.broken : '')
+        : 'Taught by you: say ' + (x.says || []).join(' or '))), 'Say: learn a new skill, or update your skills.');
+  }
+  function memorySummary() {
+    const m = memoryData();
+    const parts = [];
+    if (m.owner.name || m.owner.call) parts.push('who you are');
+    if (m.rules.length) parts.push(m.rules.length + ' rule' + (m.rules.length === 1 ? '' : 's'));
+    if (m.notes.length) parts.push(m.notes.length + ' thing' + (m.notes.length === 1 ? '' : 's') + ' you told me');
+    if (skills.list.length) parts.push(skills.list.length + ' skill' + (skills.list.length === 1 ? '' : 's'));
+    return parts.length ? 'Here is my memory: ' + parts.join(', ') + '.' : 'My memory is empty so far. Tell me your name, and anything you want me to remember.';
+  }
+
   // ---------- Kaivra's own brain (on the phone) ----------
   const brain = { id: 0, waiting: 0, typed: false, history: [], asked: '' };
   function askBrain(text, typed) {
@@ -333,6 +501,7 @@
     if (!brain.waiting || (r.id && r.id !== brain.waiting)) return; // an older question, or a command came in meanwhile
     brain.waiting = 0;
     const answer = (t) => say(t, !brain.typed);
+    if (r.skill) { try { addSkill(JSON.parse(r.skill)); } catch (e) {} }
     if (r.ok && r.text) {
       const text = String(r.text).trim();
       brain.history.push([brain.asked, text]);
@@ -397,7 +566,7 @@
   const pad = (n) => String(n).padStart(2, '0');
   const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const HELP = 'I can tell you the time, the date and the battery, open any app, call or text your contacts, go home, open notifications, lock the phone, take a screenshot, turn the torch on or off, change the volume, and show any part of my core. Ask me anything else: when I know, I answer; when I do not, I search the web or think it through, and I can write, plan and create for you. Say change voice to hear another voice, or stop when you are done.';
+  const HELP = 'I can tell you the time, the date and the battery, open any app, call or text your contacts, go home, open notifications, lock the phone, take a screenshot, turn the torch on or off, change the volume, and show any part of my core. Ask me anything else: when I know, I answer; when I do not, I search the web or think it through, and I can write, plan and create for you. Tell me rules or things to remember, and say show me your memory to see them. Say learn a new skill to teach me a routine, or update your skills to get plugins from your GitHub. Say change voice to hear another voice, or stop when you are done.';
   const CONTROL = {
     home: ['Going home.', true], back: ['Going back.', false], recents: ['Here are your recent apps.', true],
     notifications: ['Here are your notifications.', true], quicksettings: ['Here are your quick settings.', true],
@@ -436,9 +605,42 @@
     }
     if (has('say your name', 'how do you say your name', 'pronounce your name')) { answer('I am Kaivra.'); return; }
 
+    // my memory, shown in its structure
+    if (word(/^(show|open|display)( me)? (your|my|the) memory$|^(your|my) memory$|^what('s| is) in your memory$|^show (me )?what you (remember|know about me)$/)) {
+      showMemory(true);
+      answer(memorySummary());
+      return;
+    }
+    if (word(/^(close|hide) (your |the )?memory$/)) { showMemory(false); answer('Closed.'); return; }
+    // my skills
+    if (word(/^(what|which) (skills|plugins) (do you have|have you got|do you know)$|^(list|show)( me)? (your|my|the) (skills|plugins)$|^your (skills|plugins)$/)) {
+      answer(skills.list.length ? 'I have ' + skills.list.length + ' skill' + (skills.list.length === 1 ? '' : 's') + ': ' + skills.list.map((x) => x.name).join(', ') + '.'
+        : 'I have no skills yet. Say learn a new skill, or update your skills to get plugins from your GitHub.');
+      return;
+    }
+    if (word(/^(update|refresh|download|get|check)( your| my| the| new| for)* (skills|plugins)( from github)?$/)) {
+      if (native && native.fetchSkills) { nat('fetchSkills'); answer('Checking your GitHub for new skills.'); } else answer('I can only get skills inside the Kaivra app.');
+      return;
+    }
+    const rmSkill = t.match(/^(?:remove|delete|uninstall|forget) (?:the |my |your )?(.+?) (?:skill|plugin|routine)$/);
+    if (rmSkill) {
+      const before = skills.list.length;
+      skills.list = skills.list.filter((x) => norm(x.name) !== norm(rmSkill[1]));
+      if (skills.list.length < before) { saveSkillList(); answer('Removed the ' + rmSkill[1] + ' skill.'); } else answer('I have no skill called ' + rmSkill[1] + '.');
+      return;
+    }
+
     if (/^(stop|sleep|bye|goodbye|cancel|nothing|that's all|that is all|go to sleep|standby|stand by)\b/.test(t) || has('go to sleep', 'stand by', 'standby', 'goodbye')) {
       voice.reply = 'Standing by.';
       sleep(true);
+      return;
+    }
+    // the skills my owner gave me come before my built-in commands
+    for (const c of skills.compiled) {
+      let mt = null;
+      try { mt = c.test(t, rawN); } catch (e) { mt = null; }
+      if (!mt) continue;
+      runSkill(c, rawN, mt, typed);
       return;
     }
     if (word(/^((connect|add|set up|setup|download|update|get)( (your|the|my|own))* (brain|parts|library|hearing))$/) || word(/^brain (setup|settings|status)$/)) {
@@ -499,7 +701,7 @@
 
     // calls and messages (need Contacts; Phone calls to dial directly)
     const cm = rawN.match(/^(?:please\s+|kaivra\s+)?(?:call|dial|ring)\s+(.+?)\s*[.!?]?$/i);
-    if (cm) {
+    if (cm && !/^(me|myself|yourself)\b/i.test(cm[1])) {   // "call me boss" is a rule for my brain, not a phone call
       let r = { status: 'none' };
       try { if (native && native.call) r = JSON.parse(native.call(cm[1])); } catch (e) {}
       if (r.status === 'calling') { answerThenSleep('Calling ' + r.name + '.', 1500); return; }
@@ -553,6 +755,8 @@
     onEvent(type, text) {
       if (type === 'access') { readAccess(text); if (accessPanel.classList.contains('open')) renderAccess(); return; }
       if (type === 'packs') { onPacks(text); return; }
+      if (type === 'skills') { onSkills(text); return; }
+      if (type === 'http') { onHttp(text); return; }
       if (!comp._activeT && type !== 'spoken') return;
       if (type === 'brain') { onBrain(text); return; }
       keepAlive();
@@ -595,6 +799,7 @@
   btn.addEventListener('keydown', (e) => V.onKey(e));
   btn.addEventListener('contextmenu', (e) => e.preventDefault());
 
+  loadSkills();
   comp._paint();
   comp._mounted = true;
   comp.componentDidMount();
