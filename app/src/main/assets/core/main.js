@@ -73,7 +73,7 @@
   function keepAlive() {
     if (safety) clearTimeout(safety);
     // while the thinking brain searches or thinks, wait for it (on the phone that can take a minute or two)
-    const ms = brain.waiting ? 240000 : typebar.classList.contains('open') ? 120000 : native ? 30000 : 12000;
+    const ms = brain.waiting ? 240000 : typebar.classList.contains('open') ? 120000 : native ? 60000 : 12000;
     safety = setTimeout(() => { if (comp._activeT) sleep(false); }, ms);
   }
   const speakable = (text) => String(text).replace(/kaivra/gi, nameSay).replace(/\*\*|__|[*#`>~]/g, '');
@@ -104,8 +104,11 @@
     buzz(quietly ? 15 : 28);
   }
   function wake() {
+    // no spoken greeting: Kaivra simply starts listening
     voice.heard = ''; voice.partial = ''; voice.reply = ''; voice.typed = false;
-    say('Kaivra online. How can I help?', true);
+    voice.listenNext = true; voice.mode = 'listening'; quietTries = 0;
+    keepAlive(); comp._paint();
+    try { if (native && native.listen) native.listen(); } catch (e) {}
   }
   function sleep(spoken, letFinish) {
     if (safety) { clearTimeout(safety); safety = null; }
@@ -566,7 +569,7 @@
   const pad = (n) => String(n).padStart(2, '0');
   const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const HELP = 'I can tell you the time, the date and the battery, open any app, call or text your contacts, go home, open notifications, lock the phone, take a screenshot, turn the torch on or off, change the volume, and show any part of my core. Ask me anything else: when I know, I answer; when I do not, I search the web or think it through, and I can write, plan and create for you. Tell me rules or things to remember, and say show me your memory to see them. Say learn a new skill to teach me a routine, or update your skills to get plugins from your GitHub. Say change voice to hear another voice, or stop when you are done.';
+  const HELP = 'I can tell you the time, the date and the battery, open any app, call or text your contacts, go home, open notifications, lock the phone, take a screenshot, turn the torch on or off, change the volume, play music in Spotify or your other music apps and pause or skip it, and show any part of my core. Ask me anything else: when I know, I answer; when I do not, I search the web or think it through, and I can write, plan and create for you. Tell me rules or things to remember, and say show me your memory to see them. Say learn a new skill to teach me a routine, or update your skills to get plugins from your GitHub. Say change voice to hear another voice, or stop when you are done.';
   const CONTROL = {
     home: ['Going home.', true], back: ['Going back.', false], recents: ['Here are your recent apps.', true],
     notifications: ['Here are your notifications.', true], quicksettings: ['Here are your quick settings.', true],
@@ -628,6 +631,43 @@
       skills.list = skills.list.filter((x) => norm(x.name) !== norm(rmSkill[1]));
       if (skills.list.length < before) { saveSkillList(); answer('Removed the ' + rmSkill[1] + ' skill.'); } else answer('I have no skill called ' + rmSkill[1] + '.');
       return;
+    }
+
+    // music: play, pause, skip - inside the owner's music apps
+    const MEDIA = [[/^(pause|pause (the |my )?(music|song|songs|track)|stop (the |my )?(music|song|songs)|music (stop|pause))$/, 'pause', 'Paused.'],
+      [/^(resume|continue|play|resume (the |my )?(music|song)|continue (the |my )?(music|song)|play (the )?music again)$/, 'play', 'Playing.'],
+      [/^(next|skip|next (song|track)|skip (this |the )?(song|track)|play (the )?next (song|track))$/, 'next', 'Next song.'],
+      [/^(previous|previous (song|track)|last (song|track)|play (the )?previous (song|track)|go back a song)$/, 'previous', 'Previous song.']];
+    for (const [re, act, said] of MEDIA) {
+      if (!word(re)) continue;
+      const ok = native && native.media ? nat('media', act) : false;
+      if (ok) answerThenSleep(said, 500); else answer('I cannot reach the music player here.');
+      return;
+    }
+    const APP = '(spotify|youtube music|yt music|youtube|jiosaavn|saavn|gaana|wynk(?: music)?|amazon music|apple music)';
+    const pl = t.match(new RegExp('^(?:(?:open|launch|start|go to) ' + APP + ' (?:and |then )?)?(?:please )?play (.+?)(?: (?:on|in|using|from) ' + APP + ')?$'));
+    if (pl) {
+      const appWord = (pl[1] || pl[3] || '').replace(/^yt music$/, 'youtube music').replace(/^saavn$/, 'jiosaavn').replace(/^wynk music$/, 'wynk');
+      const what = pl[2].replace(/\b(please|for me|now)\b/g, '').trim();
+      const generic = /^((a|some|any|my|the)\s+)?(song|songs|music|track|tracks|playlist|something|anything|gaana|gaane)(\s+(please|now))?$/.test(what);
+      let r = {};
+      try { r = JSON.parse(nat('playMusic', generic ? '' : what, appWord) || '{}'); } catch (e) { r = {}; }
+      if (r.status === 'playing') answerThenSleep('Playing ' + what + ' on ' + r.app + '.', 1500);
+      else if (r.status === 'opened') answerThenSleep('Opening ' + r.app + ' and playing your music.', 1500);
+      else if (r.status === 'searched') answerThenSleep('Here is ' + what + ' on YouTube.', 1500);
+      else answer(appWord ? 'I could not find ' + appWord + ' on this phone.' : 'I could not find a music app on this phone. Install Spotify or another music app.');
+      return;
+    }
+    // "open X and ...": open the app, then do the rest
+    const oa = t.match(/^(?:please\s+|kaivra\s+)?(?:open|launch|start)\s+(.+?)\s+(?:and|then|and then)\s+(.+)$/);
+    if (oa) {
+      let app = '';
+      try { app = native && native.openApp ? native.openApp(oa[1].replace(/^(the|my)\s+/, '').replace(/\s+app$/, ''), false) : ''; } catch (e) { app = ''; }
+      if (app) {
+        say('Opening ' + app + '.', false);
+        setTimeout(() => handle(oa[2], typed), 1800);
+        return;
+      }
     }
 
     if (/^(stop|sleep|bye|goodbye|cancel|nothing|that's all|that is all|go to sleep|standby|stand by)\b/.test(t) || has('go to sleep', 'stand by', 'standby', 'goodbye')) {
@@ -765,19 +805,21 @@
       else if (type === 'listening') { voice.mode = 'listening'; voice.partial = ''; }
       else if (type === 'partial') { voice.partial = text; voice.reply = ''; voice.heard = ''; }
       else if (type === 'thinking') voice.mode = 'thinking';
-      else if (type === 'result') { voice.mode = 'thinking'; handle(text, false); return; }
+      else if (type === 'result') { voice.mode = 'thinking'; quietTries = 0; handle(text, false); return; }
       else if (type === 'error') { onError(String(text)); return; }
       comp._paint();
     },
     handle: handle // for testing: KaivraVoice.handle('what time is it')
   };
   let busyRetries = 0;
+  let quietTries = 0;
   function onError(code) {
     if (code === '5') return; // cancelled on purpose
     if (code === 'launch') { voice.reply = 'I could not open that.'; comp._paint(); return; }
     if (code === '6' || code === '7') { // nothing was said
       if (typebar.classList.contains('open')) { voice.mode = 'idle'; comp._paint(); return; }
-      sleep(true); return;
+      if (quietTries < 1) { quietTries++; setTimeout(() => { try { native.listen(); } catch (e) {} }, 300); return; }
+      sleep(false); return;   // a long silence: rest quietly; tap the core to talk again
     }
     if (code === '8' && busyRetries < 2) { busyRetries++; setTimeout(() => { try { native.listen(); } catch (e) {} }, 500); return; }
     busyRetries = 0;
