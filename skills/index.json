@@ -1,0 +1,7 @@
+{
+  "about": "Kaivra's plugins. Say 'update your skills' and Kaivra downloads every file listed here.",
+  "skills": [
+    {"name": "coin and dice", "file": "dice.js", "about": "Flips a coin or rolls dice"},
+    {"name": "prices", "file": "prices.js", "about": "Live bitcoin and ethereum prices, and currency rates in rupees"}
+  ]
+}

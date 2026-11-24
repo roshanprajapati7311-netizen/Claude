@@ -18,3 +18,10 @@ DuckDuckGo or Bing, news headlines from Bing News or Google News, and Wikipedia)
 Weather comes live from Open-Meteo (https://open-meteo.com/), free and without a key for personal use; its data is
 licensed CC BY 4.0, which asks for this credit: Weather data by Open-Meteo.com. When Open-Meteo does not answer, the
 weather comes from wttr.in (https://wttr.in/, a free public weather service).
+
+Plugins in the `skills` folder use free public services at the moment of asking: CoinGecko (https://www.coingecko.com)
+for crypto prices, and ExchangeRate-API's open access (https://www.exchangerate-api.com, "Rates By Exchange Rate API")
+for currency rates.
+
+Kaivra's memory (the owner's name, rules, notes and taught skills) is kept only on the owner's phone, never in this
+repository.
