@@ -32,7 +32,9 @@ public final class KaivraWeb {
     /** One thing found: where it came from and what it says. */
     public static final class Found {
         public final String title, url, text;
-        Found(String title, String url, String text) { this.title = title; this.url = url; this.text = text; }
+        final long when;   // when it was published (news), 0 if unknown
+        Found(String title, String url, String text) { this(title, url, text, 0); }
+        Found(String title, String url, String text, long when) { this.title = title; this.url = url; this.text = text; this.when = when; }
     }
 
     // ---------------- fetching ----------------
@@ -235,11 +237,16 @@ public final class KaivraWeb {
             String text = rss(it, "description");
             String head = title.length() > 20 ? title.substring(0, 20) : title;
             if (text.startsWith(head)) text = "";   // Google News only repeats the headline and the paper's name
+            long when = 0;
             if (dated) {
-                Matcher d = DAY.matcher(rss(it, "pubDate"));
+                String pub = rss(it, "pubDate");
+                Matcher d = DAY.matcher(pub);
                 if (d.find()) text = d.group(1) + (text.isEmpty() ? "" : ". " + text);
+                try {
+                    when = new java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", java.util.Locale.ENGLISH).parse(pub).getTime();
+                } catch (Exception e) { /* no date */ }
             }
-            out.add(new Found(title, target(rss(it, "link"), "url"), text.length() > 300 ? text.substring(0, 300) : text));
+            out.add(new Found(title, target(rss(it, "link"), "url"), text.length() > 300 ? text.substring(0, 300) : text, when));
         }
         return out;
     }
@@ -282,11 +289,14 @@ public final class KaivraWeb {
             if (resting(name)) continue;
             try {
                 String url = name.equals("Bing News")
-                    ? "https://www.bing.com/news/search?format=rss&mkt=en-IN&q=" + enc(topic.isEmpty() ? "India top news" : topic)
+                    ? "https://www.bing.com/news/search?format=rss&mkt=en-IN&qft=sortbydate%3d%221%22&q="
+                        + enc(topic.isEmpty() ? "India top news" : topic)
                     : topic.isEmpty() ? "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"
                     : "https://news.google.com/rss/search?hl=en-IN&gl=IN&ceid=IN:en&q=" + enc(topic);
-                List<Found> r = feed(url, max + 4, true);
+                List<Found> r = feed(url, max + 6, true);
                 if (!topic.isEmpty()) r = relevant(r, topic);
+                r = new ArrayList<>(r);
+                r.sort((x, y) -> Long.compare(y.when, x.when));   // newest first: old reports must not win over new ones
                 if (!r.isEmpty()) { via.add(name); return r.size() > max ? r.subList(0, max) : r; }
             } catch (Exception e) {
                 trouble(name, e);
@@ -552,7 +562,7 @@ public final class KaivraWeb {
                 break;
             }
         }
-        if (b.length() < maxChars * 3 / 4 && news.get().isEmpty()) {
+        if (b.length() < maxChars * 3 / 4 && (news.get().isEmpty() || web.get().isEmpty())) {
             for (Found w : wiki.get()) {
                 b.append("Wikipedia, ").append(w.title).append(": ").append(w.text.replace('\n', ' ')).append('\n');
                 sources.add(w);
