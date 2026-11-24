@@ -1,0 +1,287 @@
+numpy 2.5.5
+4
+               total        used        free      shared  buff/cache   available
+Mem:              15           3          10           0           2          12
+[ci 6s] creating the kaivra-packs release
+https://github.com/roshanprajapati7311-netizen/Claude/releases/tag/kaivra-packs
+[ci 7s] downloading Simple English Wikipedia
+  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+                                 Dload  Upload  Total   Spent   Left   Speed
+  0      0   0      0   0      0      0      0                              0  0 343.4M   0  2.18M   0      0  2.17M      0   02:37   00:01   02:36  2.18M  2 343.4M   2  6.96M   0      0  3.46M      0   01:39   00:02   01:37  3.46M  3 343.4M   3 11.70M   0      0  3.88M      0   01:28   00:03   01:25  3.88M  4 343.4M   4 16.46M   0      0  4.09M      0   01:23   00:04   01:19  4.09M  6 343.4M   6 21.34M   0      0  4.24M      0   01:20   00:05   01:15  4.24M  7 343.4M   7 26.29M   0      0  4.35M      0   01:18   00:06   01:12  4.78M  9 343.4M   9 31.15M   0      0  4.42M      0   01:17   00:07   01:10  4.80M 10 343.4M  10 36.09M   0      0  4.48M      0   01:16   00:08   01:08  4.83M 11 343.4M  11 41.03M   0      0  4.52M      0   01:15   00:09   01:06  4.87M 13 343.4M  13 45.93M   0      0  4.56M      0   01:15   00:10   01:05  4.88M 14 343.4M  14 50.87M   0      0  4.59M      0   01:14   00:11   01:03  4.88M 16 343.4M  16 55.78M   0      0  4.61M      0   01:14   00:12   01:02  4.88M 17 343.4M  17 60.71M   0      0  4.63M      0   01:14   00:13   01:01  4.88M 19 343.4M  19 65.71M   0      0  4.66M      0   01:13   00:14   00:59  4.89M 20 343.4M  20 70.65M   0      0  4.67M      0   01:13   00:15   00:58  4.89M 22 343.4M  22 75.59M   0      0  4.68M      0   01:13   00:16   00:57  4.89M 23 343.4M  23 80.53M   0      0  4.70M      0   01:13   00:17   00:56  4.90M 24 343.4M  24 85.46M   0      0  4.71M      0   01:12   00:18   00:54  4.90M 26 343.4M  26 90.34M   0      0  4.71M      0   01:12   00:19   00:53  4.87M 27 343.4M  27 95.21M   0      0  4.72M      0   01:12   00:20   00:52  4.87M 29 343.4M  29 100.0M   0      0  4.73M      0   01:12   00:21   00:51  4.87M 30 343.4M  30 105.0M   0      0  4.73M      0   01:12   00:22   00:50  4.87M 32 343.4M  32 110.0M   0      0  4.74M      0   01:12   00:23   00:49  4.88M 33 343.4M  33 114.8M   0      0  4.75M      0   01:12   00:24   00:48  4.87M 34 343.4M  34 119.7M   0      0  4.75M      0   01:12   00:25   00:47  4.88M 36 343.4M  36 124.7M   0      0  4.76M      0   01:12   00:26   00:46  4.88M 37 343.4M  37 129.6M   0      0  4.76M      0   01:12   00:27   00:45  4.88M 39 343.4M  39 134.5M   0      0  4.77M      0   01:11   00:28   00:43  4.86M 40 343.4M  40 139.5M   0      0  4.77M      0   01:11   00:29   00:42  4.88M 42 343.4M  42 144.5M   0      0  4.77M      0   01:11   00:30   00:41  4.89M 43 343.4M  43 149.4M   0      0  4.78M      0   01:11   00:31   00:40  4.88M 44 343.4M  44 154.3M   0      0  4.78M      0   01:11   00:32   00:39  4.88M 46 343.4M  46 159.2M   0      0  4.78M      0   01:11   00:33   00:38  4.88M 47 343.4M  47 164.2M   0      0  4.79M      0   01:11   00:34   00:37  4.88M 49 343.4M  49 169.1M   0      0  4.79M      0   01:11   00:35   00:36  4.87M 50 343.4M  50 174.0M   0      0  4.79M      0   01:11   00:36   00:35  4.88M 52 343.4M  52 179.0M   0      0  4.79M      0   01:11   00:37   00:34  4.88M 53 343.4M  53 183.9M   0      0  4.80M      0   01:11   00:38   00:33  4.88M 55 343.4M  55 188.9M   0      0  4.80M      0   01:11   00:39   00:32  4.88M 56 343.4M  56 193.8M   0      0  4.80M      0   01:11   00:40   00:31  4.88M 57 343.4M  57 198.7M   0      0  4.80M      0   01:11   00:41   00:30  4.88M 59 343.4M  59 203.7M   0      0  4.80M      0   01:11   00:42   00:29  4.89M 60 343.4M  60 208.6M   0      0  4.81M      0   01:11   00:43   00:28  4.89M 62 343.4M  62 213.5M   0      0  4.81M      0   01:11   00:44   00:27  4.89M 63 343.4M  63 218.5M   0      0  4.81M      0   01:11   00:45   00:26  4.89M 65 343.4M  65 223.4M   0      0  4.81M      0   01:11   00:46   00:25  4.89M 66 343.4M  66 228.4M   0      0  4.81M      0   01:11   00:47   00:24  4.90M 67 343.4M  67 233.4M   0      0  4.82M      0   01:11   00:48   00:23  4.90M 69 343.4M  69 238.2M   0      0  4.82M      0   01:11   00:49   00:22  4.89M 70 343.4M  70 243.2M   0      0  4.82M      0   01:11   00:50   00:21  4.89M 72 343.4M  72 248.2M   0      0  4.82M      0   01:11   00:51   00:20  4.91M 73 343.4M  73 253.0M   0      0  4.82M      0   01:11   00:52   00:19  4.88M 75 343.4M  75 257.9M   0      0  4.82M      0   01:11   00:53   00:18  4.87M 76 343.4M  76 262.9M   0      0  4.82M      0   01:11   00:54   00:17  4.90M 77 343.4M  77 267.7M   0      0  4.82M      0   01:11   00:55   00:16  4.88M 79 343.4M  79 272.7M   0      0  4.83M      0   01:11   00:56   00:15  4.87M 80 343.4M  80 277.7M   0      0  4.83M      0   01:11   00:57   00:14  4.89M 82 343.4M  82 282.5M   0      0  4.83M      0   01:11   00:58   00:13  4.88M 83 343.4M  83 287.4M   0      0  4.83M      0   01:11   00:59   00:12  4.86M 85 343.4M  85 292.4M   0      0  4.83M      0   01:11   01:00   00:11  4.88M 86 343.4M  86 297.3M   0      0  4.83M      0   01:11   01:01   00:10  4.88M 88 343.4M  88 302.2M   0      0  4.83M      0   01:11   01:02   00:09  4.86M 89 343.4M  89 307.2M   0      0  4.83M      0   01:11   01:03   00:08  4.88M 90 343.4M  90 312.0M   0      0  4.83M      0   01:11   01:04   00:07  4.88M 92 343.4M  92 317.0M   0      0  4.83M      0   01:10   01:05   00:05  4.88M 93 343.4M  93 321.9M   0      0  4.83M      0   01:10   01:06   00:04  4.88M 95 343.4M  95 326.9M   0      0  4.83M      0   01:10   01:07   00:03  4.88M 96 343.4M  96 331.8M   0      0  4.83M      0   01:10   01:08   00:02  4.88M 98 343.4M  98 336.8M   0      0  4.84M      0   01:10   01:09   00:01  4.89M 99 343.4M  99 341.7M   0      0  4.84M      0   01:10   01:10          4.88M100 343.4M 100 343.4M   0      0  4.84M      0   01:10   01:10          4.88M100 343.4M 100 343.4M   0      0  4.84M      0   01:10   01:10          4.88M100 343.4M 100 343.4M   0      0  4.84M      0   01:10   01:10          4.88M
+-rw-r--r-- 1 runner runner 360149050 Nov 23 21:41 /home/runner/work/Claude/Claude/work/simplewiki.xml.bz2
+[data      0s] reading the Wikipedia dump
+[data     19s]   read 20000 articles
+[data     28s]   read 40000 articles
+[data     39s]   read 60000 articles
+[data     52s]   read 80000 articles
+[data     62s]   read 100000 articles
+[data     72s]   read 120000 articles
+[data     82s]   read 140000 articles
+[data     90s]   read 160000 articles
+[data     98s]   read 180000 articles
+[data    109s]   read 200000 articles
+[data    118s]   read 220000 articles
+[data    127s]   read 240000 articles
+[data    139s]   read 260000 articles
+[data    149s] 275290 articles, 265796 with a usable lead, 115575 redirects
+[data    152s] library: 265796 articles, 366101 keys, 70.2 MB
+[data    156s] 398543 question-answer examples, 88598 Kaivra conversations
+[data    156s] training the tokenizer on 20.1 MB of text
+[data    161s]   tokenizer: 500 merges
+[data    161s]   tokenizer: 1000 merges
+[data    161s]   tokenizer: 1500 merges
+[data    161s]   tokenizer: 2000 merges
+[data    161s]   tokenizer: 2500 merges
+[data    162s]   tokenizer: 3000 merges
+[data    162s]   tokenizer: 3500 merges
+[data    162s] tokenizer: 3832 merges
+[data    196s] encoded articles
+[data    215s] encoded questions
+[data    219s] encoded conversations
+[data    224s] corpus: 117.9M tokens
+[ci 308s] uploading the data
+{
+ "articles": 275290,
+ "leads": 265796,
+ "redirects": 115575,
+ "library_keys": 366101,
+ "qa": 398543,
+ "dialogs": 177196,
+ "tokens": 117943325,
+ "seconds": 223
+}[ci 315s] fetching the hearing model
+  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+                                 Dload  Upload  Total   Spent   Left   Speed
+  0      0   0      0   0      0      0      0                              0  4 35.83M   4  1.63M   0      0  1.60M      0   00:22   00:01   00:21  1.60M 80 35.83M  80 29.01M   0      0 13.95M      0   00:02   00:02         13.96M100 35.83M 100 35.83M   0      0 15.00M      0   00:02   00:02         13.96M100 35.83M 100 35.83M   0      0 15.00M      0   00:02   00:02         13.96M100 35.83M 100 35.83M   0      0 15.00M      0   00:02   00:02         13.96M
+[ci 319s] training for 180.0 minutes
+[train      0s] new brain: 7.16M parameters, corpus 117.9M tokens
+[train      1s] start: validation loss 8.356
+[train     86s] step 50  loss 7.911  grad 1.20  lr 1.67e-04  2385 tokens/s
+[train    171s] step 100  loss 6.891  grad 1.11  lr 3.33e-04  2400 tokens/s
+[train    256s] step 150  loss 6.056  grad 0.97  lr 5.00e-04  2399 tokens/s
+[train    342s] step 200  loss 5.486  grad 1.06  lr 6.67e-04  2399 tokens/s
+[train    427s] step 250  loss 5.103  grad 1.04  lr 8.33e-04  2401 tokens/s
+[train    511s] step 300  loss 4.835  grad 1.02  lr 1.00e-03  2405 tokens/s
+[train    596s] step 350  loss 4.622  grad 0.92  lr 1.00e-03  2406 tokens/s
+[train    681s] step 400  loss 4.491  grad 0.82  lr 1.00e-03  2406 tokens/s
+[train    765s] step 450  loss 4.377  grad 0.81  lr 1.00e-03  2409 tokens/s
+[train    850s] step 500  loss 4.297  grad 0.90  lr 1.00e-03  2409 tokens/s
+[train    935s] step 550  loss 4.195  grad 0.87  lr 1.00e-03  2410 tokens/s
+[train   1020s] step 600  loss 4.101  grad 0.78  lr 1.00e-03  2410 tokens/s
+[train   1104s] step 650  loss 4.069  grad 0.75  lr 1.00e-03  2412 tokens/s
+[train   1189s] step 700  loss 4.023  grad 0.75  lr 1.00e-03  2411 tokens/s
+[train   1274s] step 750  loss 3.979  grad 0.76  lr 1.00e-03  2412 tokens/s
+[train   1358s] step 800  loss 3.926  grad 0.77  lr 1.00e-03  2412 tokens/s
+[train   1443s] step 850  loss 3.884  grad 0.72  lr 1.00e-03  2413 tokens/s
+[train   1528s] step 900  loss 3.857  grad 0.74  lr 1.00e-03  2413 tokens/s
+[train   1613s] step 950  loss 3.814  grad 0.73  lr 1.00e-03  2413 tokens/s
+[train   1698s] step 1000  loss 3.784  grad 0.75  lr 1.00e-03  2413 tokens/s
+[train   1698s] step 1000  validation loss 3.700
+[train   1783s] step 1050  loss 3.750  grad 0.75  lr 1.00e-03  2413 tokens/s
+[train   1868s] step 1100  loss 3.756  grad 0.73  lr 1.00e-03  2413 tokens/s
+[train   1953s] step 1150  loss 3.745  grad 0.73  lr 1.00e-03  2413 tokens/s
+[train   2038s] step 1200  loss 3.684  grad 0.68  lr 1.00e-03  2413 tokens/s
+[train   2122s] step 1250  loss 3.670  grad 0.76  lr 1.00e-03  2413 tokens/s
+[train   2207s] step 1300  loss 3.661  grad 0.72  lr 1.00e-03  2413 tokens/s
+[train   2292s] step 1350  loss 3.659  grad 0.76  lr 1.00e-03  2412 tokens/s
+[train   2377s] step 1400  loss 3.600  grad 0.74  lr 1.00e-03  2412 tokens/s
+[train   2463s] step 1450  loss 3.608  grad 0.77  lr 1.00e-03  2412 tokens/s
+[train   2547s] step 1500  loss 3.599  grad 0.79  lr 1.00e-03  2412 tokens/s
+[train   2632s] step 1550  loss 3.550  grad 0.74  lr 1.00e-03  2412 tokens/s
+[train   2717s] step 1600  loss 3.560  grad 0.75  lr 1.00e-03  2412 tokens/s
+[train   2802s] step 1650  loss 3.544  grad 0.73  lr 1.00e-03  2412 tokens/s
+[train   2887s] step 1700  loss 3.487  grad 0.72  lr 1.00e-03  2412 tokens/s
+[train   2972s] step 1750  loss 3.436  grad 0.79  lr 1.00e-03  2412 tokens/s
+[train   3056s] step 1800  loss 3.417  grad 0.77  lr 1.00e-03  2413 tokens/s
+[train   3141s] step 1850  loss 3.407  grad 0.74  lr 1.00e-03  2413 tokens/s
+[train   3225s] step 1900  loss 3.405  grad 0.75  lr 1.00e-03  2413 tokens/s
+[train   3310s] step 1950  loss 3.380  grad 0.74  lr 1.00e-03  2413 tokens/s
+[train   3394s] step 2000  loss 3.341  grad 0.79  lr 1.00e-03  2414 tokens/s
+[train   3395s] step 2000  validation loss 3.289
+[train   3479s] step 2050  loss 3.334  grad 0.76  lr 1.00e-03  2414 tokens/s
+[train   3563s] step 2100  loss 3.260  grad 0.77  lr 1.00e-03  2414 tokens/s
+[train   3648s] step 2150  loss 3.266  grad 0.79  lr 1.00e-03  2414 tokens/s
+[train   3732s] step 2200  loss 3.218  grad 0.78  lr 1.00e-03  2415 tokens/s
+[train   3817s] step 2250  loss 3.217  grad 0.74  lr 1.00e-03  2415 tokens/s
+[train   3902s] step 2300  loss 3.212  grad 0.76  lr 1.00e-03  2415 tokens/s
+[train   3986s] step 2350  loss 3.125  grad 0.78  lr 1.00e-03  2415 tokens/s
+[train   4070s] step 2400  loss 3.112  grad 0.80  lr 1.00e-03  2416 tokens/s
+[train   4154s] step 2450  loss 3.085  grad 0.70  lr 1.00e-03  2416 tokens/s
+[train   4238s] step 2500  loss 3.088  grad 0.81  lr 1.00e-03  2416 tokens/s
+[train   4323s] step 2550  loss 3.088  grad 0.82  lr 1.00e-03  2416 tokens/s
+[train   4407s] step 2600  loss 3.056  grad 0.78  lr 1.00e-03  2417 tokens/s
+[train   4491s] step 2650  loss 3.053  grad 0.75  lr 1.00e-03  2417 tokens/s
+[train   4575s] step 2700  loss 3.028  grad 0.80  lr 1.00e-03  2417 tokens/s
+[train   4659s] step 2750  loss 3.006  grad 0.73  lr 1.00e-03  2418 tokens/s
+[train   4744s] step 2800  loss 2.998  grad 0.76  lr 1.00e-03  2418 tokens/s
+[train   4828s] step 2850  loss 2.998  grad 0.73  lr 1.00e-03  2418 tokens/s
+[train   4911s] step 2900  loss 2.969  grad 0.71  lr 1.00e-03  2419 tokens/s
+[train   4995s] step 2950  loss 2.994  grad 0.74  lr 1.00e-03  2419 tokens/s
+[train   5078s] step 3000  loss 2.959  grad 0.74  lr 1.00e-03  2420 tokens/s
+[train   5079s] step 3000  validation loss 2.945
+[train   5163s] step 3050  loss 2.954  grad 0.73  lr 1.00e-03  2420 tokens/s
+[train   5246s] step 3100  loss 2.941  grad 0.77  lr 1.00e-03  2421 tokens/s
+[train   5329s] step 3150  loss 2.942  grad 0.70  lr 1.00e-03  2421 tokens/s
+[train   5413s] step 3200  loss 2.949  grad 0.80  lr 1.00e-03  2421 tokens/s
+[train   5497s] step 3250  loss 2.961  grad 0.73  lr 1.00e-03  2422 tokens/s
+[train   5581s] step 3300  loss 2.927  grad 0.72  lr 1.00e-03  2422 tokens/s
+[train   5664s] step 3350  loss 2.945  grad 0.75  lr 1.00e-03  2423 tokens/s
+[train   5747s] step 3400  loss 2.951  grad 0.78  lr 1.00e-03  2423 tokens/s
+[train   5831s] step 3450  loss 2.958  grad 0.71  lr 1.00e-03  2423 tokens/s
+[train   5915s] step 3500  loss 2.936  grad 0.70  lr 1.00e-03  2424 tokens/s
+[train   5999s] step 3550  loss 2.902  grad 0.74  lr 1.00e-03  2424 tokens/s
+[train   6082s] step 3600  loss 2.911  grad 0.74  lr 1.00e-03  2424 tokens/s
+[train   6166s] step 3650  loss 2.928  grad 0.73  lr 1.00e-03  2425 tokens/s
+[train   6250s] step 3700  loss 2.882  grad 0.76  lr 1.00e-03  2425 tokens/s
+[train   6334s] step 3750  loss 2.893  grad 0.81  lr 1.00e-03  2425 tokens/s
+[train   6417s] step 3800  loss 2.895  grad 0.71  lr 1.00e-03  2425 tokens/s
+[train   6501s] step 3850  loss 2.871  grad 0.79  lr 1.00e-03  2426 tokens/s
+[train   6584s] step 3900  loss 2.894  grad 0.72  lr 1.00e-03  2426 tokens/s
+[train   6668s] step 3950  loss 2.881  grad 0.75  lr 1.00e-03  2427 tokens/s
+[train   6752s] step 4000  loss 2.850  grad 0.71  lr 1.00e-03  2427 tokens/s
+[train   6752s] step 4000  validation loss 2.807
+[train   6836s] step 4050  loss 2.831  grad 0.74  lr 1.00e-03  2427 tokens/s
+[train   6920s] step 4100  loss 2.824  grad 0.71  lr 1.00e-03  2427 tokens/s
+[train   7004s] step 4150  loss 2.813  grad 0.72  lr 1.00e-03  2427 tokens/s
+[train   7088s] step 4200  loss 2.849  grad 0.67  lr 1.00e-03  2427 tokens/s
+[train   7172s] step 4250  loss 2.844  grad 0.77  lr 1.00e-03  2427 tokens/s
+[train   7256s] step 4300  loss 2.787  grad 0.73  lr 1.00e-03  2427 tokens/s
+[train   7339s] step 4350  loss 2.808  grad 0.72  lr 1.00e-03  2428 tokens/s
+[train   7423s] step 4400  loss 2.809  grad 0.73  lr 1.00e-03  2428 tokens/s
+[train   7507s] step 4450  loss 2.821  grad 0.74  lr 1.00e-03  2428 tokens/s
+[train   7590s] step 4500  loss 2.796  grad 0.69  lr 1.00e-03  2428 tokens/s
+[train   7674s] step 4550  loss 2.809  grad 0.73  lr 1.00e-03  2429 tokens/s
+[train   7758s] step 4600  loss 2.842  grad 0.69  lr 1.00e-03  2429 tokens/s
+[train   7842s] step 4650  loss 2.813  grad 0.75  lr 1.00e-03  2429 tokens/s
+[train   7925s] step 4700  loss 2.806  grad 0.70  lr 1.00e-03  2429 tokens/s
+[train   8009s] step 4750  loss 2.808  grad 0.72  lr 1.00e-03  2429 tokens/s
+[train   8093s] step 4800  loss 2.765  grad 0.74  lr 1.00e-03  2429 tokens/s
+[train   8177s] step 4850  loss 2.785  grad 0.63  lr 1.00e-03  2430 tokens/s
+[train   8261s] step 4900  loss 2.787  grad 0.78  lr 1.00e-03  2430 tokens/s
+[train   8344s] step 4950  loss 2.793  grad 0.70  lr 1.00e-03  2430 tokens/s
+[train   8428s] step 5000  loss 2.765  grad 0.74  lr 1.00e-03  2430 tokens/s
+[train   8429s] step 5000  validation loss 2.726
+[train   8512s] step 5050  loss 2.759  grad 0.72  lr 1.00e-03  2430 tokens/s
+[train   8596s] step 5100  loss 2.778  grad 0.70  lr 1.00e-03  2430 tokens/s
+[train   8680s] step 5150  loss 2.785  grad 0.74  lr 1.00e-03  2430 tokens/s
+[train   8763s] step 5200  loss 2.783  grad 0.71  lr 1.00e-03  2431 tokens/s
+[train   8846s] step 5250  loss 2.782  grad 0.73  lr 1.00e-03  2431 tokens/s
+[train   8930s] step 5300  loss 2.770  grad 0.70  lr 1.00e-03  2431 tokens/s
+[train   9013s] step 5350  loss 2.778  grad 0.67  lr 1.00e-03  2431 tokens/s
+[train   9096s] step 5400  loss 2.750  grad 0.73  lr 1.00e-03  2432 tokens/s
+[train   9180s] step 5450  loss 2.763  grad 0.75  lr 1.00e-03  2432 tokens/s
+[train   9263s] step 5500  loss 2.766  grad 0.76  lr 1.00e-03  2432 tokens/s
+[train   9346s] step 5550  loss 2.745  grad 0.70  lr 1.00e-03  2432 tokens/s
+[train   9430s] step 5600  loss 2.758  grad 0.69  lr 1.00e-03  2432 tokens/s
+[train   9513s] step 5650  loss 2.707  grad 0.73  lr 1.00e-03  2433 tokens/s
+[train   9597s] step 5700  loss 2.746  grad 0.69  lr 1.00e-03  2433 tokens/s
+[train   9680s] step 5750  loss 2.747  grad 0.71  lr 1.00e-03  2433 tokens/s
+[train   9763s] step 5800  loss 2.759  grad 0.73  lr 1.00e-03  2433 tokens/s
+[train   9847s] step 5850  loss 2.766  grad 0.74  lr 1.00e-03  2433 tokens/s
+[train   9930s] step 5900  loss 2.748  grad 0.72  lr 1.00e-03  2434 tokens/s
+[train  10014s] step 5950  loss 2.733  grad 0.77  lr 1.00e-03  2434 tokens/s
+[train  10098s] step 6000  loss 2.728  grad 0.74  lr 1.00e-03  2434 tokens/s
+[train  10098s] step 6000  validation loss 2.655
+[train  10182s] step 6050  loss 2.756  grad 0.74  lr 1.00e-03  2434 tokens/s
+[train  10266s] step 6100  loss 2.733  grad 0.71  lr 1.00e-03  2434 tokens/s
+[train  10349s] step 6150  loss 2.740  grad 0.72  lr 1.00e-03  2434 tokens/s
+[train  10433s] step 6200  loss 2.745  grad 0.68  lr 1.00e-03  2434 tokens/s
+[train  10516s] step 6250  loss 2.785  grad 0.69  lr 1.00e-03  2434 tokens/s
+[train  10599s] step 6300  loss 2.748  grad 0.74  lr 1.00e-03  2435 tokens/s
+[train  10683s] step 6350  loss 2.749  grad 0.75  lr 1.00e-03  2435 tokens/s
+[train  10766s] step 6400  loss 2.742  grad 0.75  lr 1.00e-03  2435 tokens/s
+[train  10802s] finished: 6421 steps this run, 6421 in total, 26.3M tokens, validation loss 2.644
+[train  10809s] exported brain.bin and samples
+Q: hello
+   (library: Hello (Adele song))
+A: "Hello" is a song recorded by English singer-songwriter Adele. It is from her third studio album, 25.
+A without library: Hello. I am here.
+
+Q: who are you
+   (library: You)
+A: You is a second-person English pronoun. The word can be singular or plural.
+A without library: I am Kaivra, your personal assistant. I live on this phone and I answer only to you.
+
+Q: who made you
+A: You created me. Every part of me is yours.
+
+Q: what can you do
+A: I can tell the time, the date and the battery, open apps, call and text your contacts, control the phone, turn the torch on and off, and answer questions from my own knowledge library.
+
+Q: are you google
+A: I am not any of those. I am Kaivra, your own assistant, built from zero.
+
+Q: how are you
+A: I am doing well, thank you. What can I do for you?
+
+Q: what is the sun
+   (library: Sun)
+A: The Sun, also known as Sol, is a star at the center of the solar system. It is a white star that gives off different types of energy such as infrared energy (heat), ultraviolet light, radio waves and light.
+A without library: The Sun is a 1990 American comedy movie directed by John F. Kennedy and was based on the 1990 novel of the same name by John F. Kennedy. It stars John F. Kennedy, Jennifer Bradley, and was distributed by 20th Century Fox.
+
+Q: who was mahatma gandhi
+   (library: Mahatma Gandhi)
+A: Mohandas Karmchand Gandhi (2 October 1869– 30 January 1948) was a leader of nationalism in British-ruled India. He is more commonly called Mahatma Gandhi.
+A without library: Mahatma Gandhi (born 1974) is a Japanese football player. He plays for the Japan national team.
+
+Q: tell me about india
+   (library: India)
+A: India, officially the Republic of India, also known as Hindustān, is a country in South Asia. It is the world's seventh-largest country by area.
+A without library: Adia is a 1992 American comedy movie directed by John F. Kennedy and was based on the 1992 novel of the same name by John F. Kennedy. It stars John F. Kennedy, Linda Ross, and was distributed by 20th Century Fox.
+
+Q: what is a black hole
+   (library: Black hole)
+A: A black hole is a place in space where gravity is so strong that nothing can escape from it, even light. This idea comes from Albert Einstein's general theory of relativity.
+A without library: A black hole is a type of hole that is used to make a black hole. It is used to make a black hole.
+
+Q: what is water
+   (library: Water)
+A: Water is a simple chemical compound made of two hydrogen atoms and one oxygen atom. It is clear, has no taste or smell, and is almost colorless.
+A without library: I water is a small town in the U.S. state of Texas.
+
+Q: where is paris
+   (library: Paris)
+A: Paris (nicknamed the "City of light") is the capital city of France, and the largest city in France. The area is 105 km2, and around 2.15 million people live there.
+A without library: Caris is a city in the U.S. state of Texas.
+
+Q: write a poem
+A: My brain is too young for poems and stories. Give me some more nights of training.
+
+Q: tell me a joke
+A: Why did the computer go to the doctor? It had a virus.
+
+Q: qwzx plorb
+A: I did not understand that. Can you say it another way?
+
+Free writing: kaivra Tell me about Kelly FutureKelly Future is a 1966 American comedy movie directed by John Worth and starring Richard Bedford, Eric Grant, Michael Jackson, Marie Lewis, Anna Bell, Michael Foster, Lil Roger, Anna Barney and was distributed by 2
+{
+ "version": 1,
+ "updated": "2026-11-24T00:45Z",
+ "brain": {
+  "file": "brain.bin.gz",
+  "bytes": 6743676,
+  "sha256": "7ed2e942419a1e8468af6c427191079c16aa4a4754df3c483e0c6acfc45a7a03",
+  "version": 6421,
+  "steps": 6421,
+  "tokens": 26300416,
+  "val_loss": 2.6438,
+  "trained": "2026-11-24"
+ },
+ "library": {
+  "file": "library-v1.bin.gz",
+  "bytes": 25573371,
+  "sha256": "2235aa46cbb38d006fdf480c01b96d13f28ff6f23a7f48cb8dffa4e257c15e73",
+  "version": 1,
+  "articles": 265796
+ },
+ "hearing": {
+  "file": "hearing-en-in.zip",
+  "bytes": 37573330,
+  "sha256": "20663dcac4d5cb783a579c54d98339344a688e4ec6e1b4a4b059fd1235454cc7",
+  "version": 1,
+  "model": "vosk-model-small-en-in-0.4"
+ }
+}
+[ci 11129s] uploading the brain
+[ci 11134s] done
+[ci 11134s] status: ok

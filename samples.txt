@@ -1,0 +1,62 @@
+Q: hello
+   (library: Hello (Adele song))
+A: "Hello" is a song recorded by English singer-songwriter Adele. It is from her third studio album, 25.
+A without library: Hello. I am here.
+
+Q: who are you
+   (library: You)
+A: You is a second-person English pronoun. The word can be singular or plural.
+A without library: I am Kaivra, your personal assistant. I live on this phone and I answer only to you.
+
+Q: who made you
+A: You created me. Every part of me is yours.
+
+Q: what can you do
+A: I can tell the time, the date and the battery, open apps, call and text your contacts, control the phone, turn the torch on and off, and answer questions from my own knowledge library.
+
+Q: are you google
+A: I am not any of those. I am Kaivra, your own assistant, built from zero.
+
+Q: how are you
+A: I am doing well, thank you. What can I do for you?
+
+Q: what is the sun
+   (library: Sun)
+A: The Sun, also known as Sol, is a star at the center of the solar system. It is a white star that gives off different types of energy such as infrared energy (heat), ultraviolet light, radio waves and light.
+A without library: The Sun is a 1990 American comedy movie directed by John F. Kennedy and was based on the 1990 novel of the same name by John F. Kennedy. It stars John F. Kennedy, Jennifer Bradley, and was distributed by 20th Century Fox.
+
+Q: who was mahatma gandhi
+   (library: Mahatma Gandhi)
+A: Mohandas Karmchand Gandhi (2 October 1869– 30 January 1948) was a leader of nationalism in British-ruled India. He is more commonly called Mahatma Gandhi.
+A without library: Mahatma Gandhi (born 1974) is a Japanese football player. He plays for the Japan national team.
+
+Q: tell me about india
+   (library: India)
+A: India, officially the Republic of India, also known as Hindustān, is a country in South Asia. It is the world's seventh-largest country by area.
+A without library: Adia is a 1992 American comedy movie directed by John F. Kennedy and was based on the 1992 novel of the same name by John F. Kennedy. It stars John F. Kennedy, Linda Ross, and was distributed by 20th Century Fox.
+
+Q: what is a black hole
+   (library: Black hole)
+A: A black hole is a place in space where gravity is so strong that nothing can escape from it, even light. This idea comes from Albert Einstein's general theory of relativity.
+A without library: A black hole is a type of hole that is used to make a black hole. It is used to make a black hole.
+
+Q: what is water
+   (library: Water)
+A: Water is a simple chemical compound made of two hydrogen atoms and one oxygen atom. It is clear, has no taste or smell, and is almost colorless.
+A without library: I water is a small town in the U.S. state of Texas.
+
+Q: where is paris
+   (library: Paris)
+A: Paris (nicknamed the "City of light") is the capital city of France, and the largest city in France. The area is 105 km2, and around 2.15 million people live there.
+A without library: Caris is a city in the U.S. state of Texas.
+
+Q: write a poem
+A: My brain is too young for poems and stories. Give me some more nights of training.
+
+Q: tell me a joke
+A: Why did the computer go to the doctor? It had a virus.
+
+Q: qwzx plorb
+A: I did not understand that. Can you say it another way?
+
+Free writing: kaivra Tell me about Kelly FutureKelly Future is a 1966 American comedy movie directed by John Worth and starring Richard Bedford, Eric Grant, Michael Jackson, Marie Lewis, Anna Bell, Michael Foster, Lil Roger, Anna Barney and was distributed by 2
