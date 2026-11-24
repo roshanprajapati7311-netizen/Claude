@@ -4,6 +4,7 @@ import android.Manifest
 import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -25,7 +26,9 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.ContactsContract
+import android.provider.MediaStore
 import android.provider.Settings
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
@@ -91,6 +94,7 @@ class MainActivity : Activity() {
     private lateinit var packs: Packs
     private lateinit var voicePacks: VoicePacks
     @Volatile private var voiceId = VoicePacks.DEFAULT
+    @Volatile private var unitsLoaded = false   // the chosen recorded voice is ready to speak
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -149,7 +153,14 @@ class MainActivity : Activity() {
         val token = speechToken.incrementAndGet()
         sendToPage("speaking", text)
         speechExec.execute {
-            val pcm = try { voice.synthesize(text) } catch (e: Exception) { ShortArray(0) }
+            // never the old robot voice unless the owner chose it: wait for the recorded voice (it loads in a moment),
+            // and if it is still not here, answer in text only
+            if (voiceId != VoicePacks.ROBOT) {
+                val until = System.currentTimeMillis() + 8000
+                while (!unitsLoaded && token == speechToken.get() && System.currentTimeMillis() < until) Thread.sleep(50)
+            }
+            val pcm = if (voiceId != VoicePacks.ROBOT && !unitsLoaded) ShortArray(0)
+                else try { voice.synthesize(text) } catch (e: Exception) { ShortArray(0) }
             if (token == speechToken.get() && pcm.isNotEmpty()) play(pcm, token)
             mainHandler.post {
                 if (token == speechToken.get()) {
@@ -201,14 +212,18 @@ class MainActivity : Activity() {
         voiceId = if (VoicePacks.VOICES.any { it.id == id }) id else VoicePacks.DEFAULT
         prefs.edit().putString("voice", voiceId).apply()
         val wanted = voiceId
+        unitsLoaded = false
         if (wanted == VoicePacks.ROBOT) { voice.setUnits(null); return }
         if (voicePacks.ready(wanted)) {
-            Thread { val u = voicePacks.load(wanted); if (voiceId == wanted) voice.setUnits(u) }.start()
+            Thread {
+                val u = voicePacks.load(wanted)
+                if (voiceId == wanted) { voice.setUnits(u); unitsLoaded = u != null }
+            }.start()
         } else {
-            voice.setUnits(null) // the built-in voice speaks until the recorded one is here
+            voice.setUnits(null) // answers are text only until the recorded voice is here
             voicePacks.download(wanted) { ok ->
                 if (voiceId == wanted) {
-                    if (ok) voice.setUnits(voicePacks.load(wanted))
+                    if (ok) { val u = voicePacks.load(wanted); voice.setUnits(u); unitsLoaded = u != null }
                 } else if (!voicePacks.ready(voiceId)) {
                     mainHandler.post { useVoice(voiceId) } // the choice changed meanwhile: get that one
                 }
@@ -218,7 +233,7 @@ class MainActivity : Activity() {
 
     private fun voiceLabel(): String {
         val v = VoicePacks.VOICES.firstOrNull { it.id == voiceId } ?: VoicePacks.VOICES[0]
-        val extra = if (voicePacks.ready(v.id)) "" else ", which I am downloading now, about 45 megabytes. Until it arrives you will hear my old robot voice"
+        val extra = if (voicePacks.ready(v.id)) "" else ", which I am downloading now, about 45 megabytes. Until it arrives I will answer in text"
         return v.label + extra + ", voice " + (VoicePacks.VOICES.indexOf(v) + 1) + " of " + VoicePacks.VOICES.size
     }
 
@@ -257,7 +272,7 @@ class MainActivity : Activity() {
             val svc = SpeechService(rec, 16000f)
             recognizer = rec
             speechService = svc
-            svc.startListening(hearingListener, 9000)
+            svc.startListening(hearingListener, 20000)   // the owner has time to think; a finished sentence ends it sooner
             sendToPage("listening", "")
         } catch (e: Throwable) {
             stopHearing()
@@ -434,6 +449,70 @@ class MainActivity : Activity() {
             }
             sendToPage("http", res.toString())
         }.start()
+    }
+
+    // ---------- music: playing inside the owner's apps ----------
+
+    private val musicApps = linkedMapOf(
+        "spotify" to "com.spotify.music",
+        "youtube music" to "com.google.android.apps.youtube.music",
+        "jiosaavn" to "com.jio.media.jiobeats",
+        "gaana" to "com.gaana",
+        "wynk" to "com.bsbportal.music",
+        "amazon music" to "com.amazon.mp3",
+        "apple music" to "com.apple.android.music")
+
+    private fun installed(pkg: String) = try { packageManager.getLaunchIntentForPackage(pkg) != null } catch (e: Exception) { false }
+
+    /** Presses a media button (play, pause, next...) for whichever music app is playing or was playing last. */
+    private fun mediaKey(code: Int) {
+        val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code))
+        am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+    }
+
+    /**
+     * Plays music in the owner's app: a song, artist or playlist by name (the app's own "play from search", the way
+     * phone assistants ask music apps to play), or, with no name, opens the app and presses play. YouTube gets a search.
+     */
+    @Suppress("DEPRECATION")
+    private fun playMusic(query: String, app: String): String {
+        val o = JSONObject()
+        val q = query.trim()
+        if (app == "youtube") {
+            val i = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(q.ifEmpty { "music" })))
+            if (installed("com.google.android.youtube")) i.setPackage("com.google.android.youtube")
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            mainHandler.post { startSafely(i) }
+            return o.put("status", "searched").put("app", "YouTube").toString()
+        }
+        val pkg = musicApps[app]?.takeIf { installed(it) } ?: if (app.isEmpty()) musicApps.values.firstOrNull { installed(it) } else null
+        if (pkg == null) return o.put("status", "none").put("app", app).toString()
+        val label = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() } catch (e: Exception) { app }
+        if (q.isEmpty()) {
+            // open the app, then press play: it carries on with the owner's music
+            val launch = packageManager.getLaunchIntentForPackage(pkg) ?: return o.put("status", "none").put("app", label).toString()
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            mainHandler.post { startSafely(launch) }
+            mainHandler.postDelayed({ mediaKey(KeyEvent.KEYCODE_MEDIA_PLAY) }, 3500)
+            return o.put("status", "opened").put("app", label).toString()
+        }
+        val play = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+        play.putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+        play.putExtra(SearchManager.QUERY, q)
+        play.setPackage(pkg)
+        play.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        mainHandler.post {
+            try {
+                startActivity(play)
+            } catch (e: Exception) {
+                // this app does not take a play request: open its search instead
+                val search = if (pkg == "com.spotify.music") Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:" + Uri.encode(q)))
+                    else packageManager.getLaunchIntentForPackage(pkg)
+                if (search != null) { search.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startSafely(search) }
+            }
+        }
+        return o.put("status", "playing").put("app", label).put("query", q).toString()
     }
 
     private fun think(payload: String) {
@@ -687,6 +766,26 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun httpGet(id: Int, url: String) { this@MainActivity.httpGet(id, url) }
+
+        /** Plays a song, artist or playlist in a music app ("" = the first one installed); returns what happened as JSON. */
+        @JavascriptInterface
+        fun playMusic(query: String, app: String): String = this@MainActivity.playMusic(query, app)
+
+        /** Media buttons for whatever is playing: play, pause, toggle, next, previous, stop. */
+        @JavascriptInterface
+        fun media(action: String): Boolean {
+            val code = when (action) {
+                "play" -> KeyEvent.KEYCODE_MEDIA_PLAY
+                "pause" -> KeyEvent.KEYCODE_MEDIA_PAUSE
+                "toggle" -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                "next" -> KeyEvent.KEYCODE_MEDIA_NEXT
+                "previous" -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
+                "stop" -> KeyEvent.KEYCODE_MEDIA_STOP
+                else -> return false
+            }
+            mainHandler.post { mediaKey(code) }
+            return true
+        }
 
         /** Asks Kaivra's own brain; the answer arrives as a "brain" event. */
         @JavascriptInterface
