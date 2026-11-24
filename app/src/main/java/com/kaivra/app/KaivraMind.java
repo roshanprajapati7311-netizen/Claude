@@ -94,13 +94,14 @@ public final class KaivraMind implements AutoCloseable {
         + "write and create, remember rules and notes the owner gives you, learn new skills (the owner teaches you a "
         + "routine by saying learn a new skill, and new plugins come from the owner's GitHub when the owner says update "
         + "your skills), and through your command system call and text "
-        + "contacts, open apps, turn the torch on and off, change the volume, take screenshots and lock the phone. Do not "
-        + "pretend to do anything else yet. Phone actions are done by your command system when the owner asks for them "
-        + "directly, for example: call Rahul, or open the camera.";
+        + "contacts, open apps, turn the torch on and off, change the volume, take screenshots and lock the phone. You "
+        + "cannot yet set alarms, reminders or timers, read messages or notifications, or see the screen; never say you "
+        + "can. Phone actions are done by your command system when the owner asks for them directly, for example: call "
+        + "Rahul, or open the camera. Always help at once: never make anything wait for the owner's name.\n";
 
     private long handle;
     private final String info;
-    private String primedFor = "";
+    private boolean primed;   // Kaivra's fixed instructions are in the engine's memory
     private final List<String> rules = new ArrayList<>();   // how the owner wants Kaivra to behave, oldest first
     private final List<String> notes = new ArrayList<>();   // what the owner asked Kaivra to remember, oldest first
     static final int MAX_NOTES = 80, NOTES_IN_PROMPT = 2500;
@@ -130,12 +131,15 @@ public final class KaivraMind implements AutoCloseable {
 
     static final String START = "<|im_start|>", END = "<|im_end|>\n", REPLY = "<|im_start|>assistant\n<think>\n\n</think>\n\n";
 
+    /** Kaivra's fixed instructions: read into the engine once, so every answer starts from there. */
+    static String head() { return START + "system\n" + SYSTEM; }
+
+    /** The fixed instructions, then what changes: the owner, their rules and notes, and today's date. */
     String system() {
-        StringBuilder b = new StringBuilder(START).append("system\n").append(SYSTEM);
+        // the date first: a letter right after the fixed part keeps the engine's words lined up with what it read once
+        StringBuilder b = new StringBuilder(head()).append("Today is ").append(today()).append('.');
         String who = ownerName.isEmpty() ? ownerCall : ownerName;
-        if (who.isEmpty()) {
-            b.append("\nYour owner has not told you their name yet; when it fits, ask once.");
-        } else {
+        if (!who.isEmpty()) {
             b.append("\nYour owner is ").append(who);
             if (!ownerCall.isEmpty() && !ownerCall.equalsIgnoreCase(who)) b.append(", whom you call ").append(ownerCall);
             b.append(". You belong only to ").append(who).append('.');
@@ -155,7 +159,7 @@ public final class KaivraMind implements AutoCloseable {
             b.append("\nWhat your owner asked you to remember:");
             for (String n : fit) b.append("\n- ").append(n);
         }
-        return b.append("\nToday is ").append(today()).append('.').append(END).toString();
+        return b.append(END).toString();
     }
 
     /** Kaivra's memory of the owner's rules and notes (kept by the app on the phone); used in every answer. */
@@ -164,7 +168,6 @@ public final class KaivraMind implements AutoCloseable {
         notes.clear();
         for (String r : ownerRules) if (r != null && !r.trim().isEmpty() && rules.size() < MAX_RULES) rules.add(r.trim());
         for (String n : ownerNotes) if (n != null && !n.trim().isEmpty() && notes.size() < MAX_NOTES) notes.add(n.trim());
-        primedFor = "";   // the instructions changed: read them again
     }
 
     public synchronized List<String> rules() { return new ArrayList<>(rules); }
@@ -186,11 +189,39 @@ public final class KaivraMind implements AutoCloseable {
         return t.isEmpty() ? t : Character.toUpperCase(t.charAt(0)) + t.substring(1);
     }
 
+    /** A note as Kaivra says it back to the owner: "The owner's exam is on Friday" becomes "your exam is on Friday". */
+    static String toOwner(String note) {
+        String t = note.replaceAll("(?i)\\bthe owner's\\b", "your").replaceAll("(?i)\\bthe owner is\\b", "you are")
+            .replaceAll("(?i)\\bthe owner has\\b", "you have").replaceAll("(?i)\\bthe owner does\\b", "you do")
+            .replaceAll("(?i)\\bthe owner doesn't\\b", "you don't").replaceAll("(?i)\\bthe owner\\b", "you");
+        t = t.replaceAll("[.!]+$", "");
+        return t.isEmpty() ? t : Character.toLowerCase(t.charAt(0)) + t.substring(1);
+    }
+
+    /** Everything Kaivra remembers about the owner, said plainly (the memory screen shows it in its parts). */
+    synchronized String recall() {
+        List<String> said = new ArrayList<>();
+        if (!ownerName.isEmpty()) said.add("your name is " + ownerName + (ownerCall.isEmpty() ? "" : " and I call you " + ownerCall));
+        else if (!ownerCall.isEmpty()) said.add("I call you " + ownerCall);
+        for (String n : notes) said.add(toOwner(n));
+        StringBuilder b = new StringBuilder();
+        if (said.isEmpty() && rules.isEmpty()) {
+            return "I do not remember anything about you yet. Tell me your name, or say remember that, and I will keep it.";
+        }
+        if (!said.isEmpty()) b.append("I remember that ").append(String.join("; ", said)).append('.');
+        if (!rules.isEmpty()) {
+            b.append(b.length() > 0 ? " " : "").append("Your rules for me: ");
+            List<String> rs = new ArrayList<>();
+            for (String r : rules) rs.add(toOwner(r));
+            b.append(String.join("; ", rs)).append('.');
+        }
+        return b.toString();
+    }
+
     /** The owner's name and how Kaivra should address them (kept by the app on the phone, never in the code). */
     public synchronized void setOwner(String name, String call) {
         ownerName = name == null ? "" : name.trim();
         ownerCall = call == null ? "" : call.trim();
-        primedFor = "";
     }
 
     public synchronized String[] owner() { return new String[]{ownerName, ownerCall}; }
@@ -269,6 +300,9 @@ public final class KaivraMind implements AutoCloseable {
     private static final Pattern CALL_ME = Pattern.compile(
         "(?i)^\\s*(?:kaivra[,!]?\\s+)?(?:from now on,?\\s+)?(?:please\\s+)?(?:you can\\s+)?call me\\s+([\\p{L}][\\p{L} .'-]{0,29}?)"
         + "(?:\\s+from now on)?\\s*[.!]?$");
+    private static final Pattern RECALL = Pattern.compile(
+        "(?i)^\\s*(?:kaivra[,!]?\\s+)?(?:what do you (?:remember|know)(?: about me)?|what have i told you|tell me what you "
+        + "(?:remember|know about me)|what(?:'s| is) in your memory|what are my rules|kya yaad hai)\\s*[?.!]*$");
     private static final Pattern FORGET = Pattern.compile("(?i)^\\s*(?:kaivra[,!]?\\s+)?(?:please\\s+)?forget\\s+(.+)$");
     private static final Pattern WEATHER = Pattern.compile("(?i)\\b(weather|temperature|forecast|rain|mausam)\\b");
     private static final Pattern GAVE_UP = Pattern.compile(
@@ -280,6 +314,7 @@ public final class KaivraMind implements AutoCloseable {
         String q = question.trim();
         if (FORGET_ALL.matcher(q).matches() || FORGET.matcher(q).matches()) return "forget";
         if (LEARN.matcher(q).matches()) return "learn";
+        if (RECALL.matcher(q).matches()) return "recall";
         if (MY_NAME.matcher(q).matches() || CALL_ME.matcher(q).matches()) return "owner";
         if ((NOTE.matcher(q).matches() || MENTION.matcher(q).matches()) && !q.endsWith("?")) return "note";
         if (RULE.matcher(q).matches() && !q.endsWith("?")) return "rule";   // a question is not a rule
@@ -362,11 +397,66 @@ public final class KaivraMind implements AutoCloseable {
         return b.append('"').toString();
     }
 
+    static String skillJson(String raw) { return skillJson(raw, null); }
+
+    /** Words that must be in the owner's request for a step of that kind to be kept. */
+    private static final String[][] ASKED = {
+        {"torch", "(?i)\\b(torch|flash ?light|flash|light)\\b"}, {"volume", "(?i)\\b(volume|louder|quieter|softer|sound|loud|mute)\\b"},
+        {"call", "(?i)\\b(call|ring|dial)\\b"}, {"text", "(?i)\\b(text|message|sms)\\b"},
+        {"web", "(?i)(website|\\bsite\\b|\\blink\\b|https?://|www\\.|\\.com\\b|\\burl\\b|web ?page)"},
+        {"wait", "(?i)\\b(wait|seconds?|minutes?|pause|later)\\b"}, {"open", "(?i)\\b(open|launch|start|play|show)\\b"},
+        {"phone", "(?i)\\b(home|back|lock|screenshot|screen shot|notifications?|quick settings|recents?|recent apps)\\b"}};
+
     /**
-     * The skill the brain wrote, checked step by step and rewritten as clean JSON ({name, kind, source, says, steps}),
-     * or null if it is not a usable skill. Only the steps the app knows are kept.
+     * The skill the brain wrote for the owner's request, keeping only the steps the request asked for (a small brain
+     * sometimes adds steps of its own), and opening the app the owner named.
      */
-    static String skillJson(String raw) {
+    static String skillJson(String raw, String request) {
+        String s = skillJsonRaw(raw);
+        if (s == null || request == null) return s;
+        Object o = KaivraWeb.MiniJson.parse(s);
+        String req = request.toLowerCase(Locale.ROOT);
+        StringBuilder kept = new StringBuilder();
+        int n = 0;
+        boolean opens = false;
+        for (Object x : KaivraWeb.MiniJson.list(at(o, "steps"))) {
+            String d = str(at(x, "do"));
+            boolean ok = true;
+            for (String[] a : ASKED) if (a[0].equals(d) && !Pattern.compile(a[1]).matcher(req).find()) ok = false;
+            if (!ok) continue;
+            if (d.equals("open")) opens = true;
+            kept.append(n++ == 0 ? "" : ",").append(stepJson(x));
+        }
+        // "open Netflix" means the app, not its website
+        java.util.regex.Matcher m = Pattern.compile("(?i)\\b(?:open|launch|start)\\s+([\\p{L}0-9][\\p{L}0-9 ]{0,30}?)(?=\\s*(?:,|\\band\\b|\\bthen\\b|$|\\.))").matcher(request);
+        if (!opens && m.find()) {
+            String app = m.group(1).trim().replaceFirst("(?i)^(the|my)\\s+", "").replaceFirst("(?i)\\s+app$", "");
+            if (!app.isEmpty()) kept.insert(0, "{\"do\":\"open\",\"app\":" + js(app) + "}" + (n++ == 0 ? "" : ","));
+        }
+        if (n == 0) return null;
+        StringBuilder out = new StringBuilder("{\"name\":").append(js(str(at(o, "name"))))
+            .append(",\"kind\":\"routine\",\"source\":\"owner\",\"says\":[");
+        List<?> says = KaivraWeb.MiniJson.list(at(o, "says"));
+        for (int i = 0; i < says.size(); i++) out.append(i == 0 ? "" : ",").append(js(str(says.get(i))));
+        return out.append("],\"steps\":[").append(kept).append("]}").toString();
+    }
+
+    /** One checked step, written back as JSON. */
+    private static String stepJson(Object x) {
+        StringBuilder b = new StringBuilder("{");
+        boolean first = true;
+        for (java.util.Map.Entry<?, ?> e : ((java.util.Map<?, ?>) x).entrySet()) {
+            b.append(first ? "" : ",").append(js(String.valueOf(e.getKey()))).append(':');
+            Object v = e.getValue();
+            if (v instanceof Boolean) b.append(v);
+            else if (v instanceof Double) b.append(str(v));
+            else b.append(js(str(v)));
+            first = false;
+        }
+        return b.append('}').toString();
+    }
+
+    private static String skillJsonRaw(String raw) {
         String t = raw.replace("```json", "").replace("```", "");
         int a = t.indexOf('{'), b = t.lastIndexOf('}');
         if (a < 0 || b <= a) return null;
@@ -429,10 +519,8 @@ public final class KaivraMind implements AutoCloseable {
     private int lastResult;
 
     private String generate(String prompt, int maxTokens, float temp, Listener listener) {
-        String day = today();
-        if (!day.equals(primedFor)) {   // read Kaivra's instructions once a day; every conversation starts from there
-            nativePrime(handle, system().getBytes(StandardCharsets.UTF_8));
-            primedFor = day;
+        if (!primed) {   // read Kaivra's fixed instructions once; every conversation starts from there
+            primed = nativePrime(handle, head().getBytes(StandardCharsets.UTF_8));
         }
         final StringBuilder raw = new StringBuilder();
         ByteSink sink = bytes -> {
@@ -496,10 +584,14 @@ public final class KaivraMind implements AutoCloseable {
             if (rules.size() >= MAX_RULES) rules.remove(0);
             rules.add(r);
             lastKept = rules;
-            primedFor = "";
             String raw = generate(prompt(question, history, null, RULE_HINT), 120, 0.5f, listener);
             String text = dropSignal(clean(raw));
             return new Answer(text.isEmpty() ? "Done. I will remember that." : text, "rule", sources);
+        }
+        if (way.equals("recall")) {
+            String text = recall();
+            if (listener != null) listener.onText(text);
+            return new Answer(text, "recall", sources);
         }
         if (way.equals("note")) {
             // something to remember about the owner's life: kept (the app saves it), then a natural reply
@@ -508,7 +600,6 @@ public final class KaivraMind implements AutoCloseable {
             if (notes.size() >= MAX_NOTES) notes.remove(0);
             notes.add(n);
             lastKept = notes;
-            primedFor = "";
             String raw = generate(prompt(question, history, null, NOTE_HINT), 160, 0.5f, listener);
             String text = dropSignal(clean(raw));
             return new Answer(text.isEmpty() ? "Noted. I will remember that." : text, "note", sources);
@@ -523,7 +614,6 @@ public final class KaivraMind implements AutoCloseable {
                 m = CALL_ME.matcher(question.trim());
                 if (m.matches()) ownerCall = m.group(1).trim();
             }
-            primedFor = "";
             String raw = generate(prompt(question, history, null, RULE_HINT), 120, 0.5f, listener);
             String text = dropSignal(clean(raw));
             return new Answer(text.isEmpty() ? "Got it." : text, "rule", sources);
@@ -531,7 +621,7 @@ public final class KaivraMind implements AutoCloseable {
         if (way.equals("learn")) {
             // the owner teaches a new skill: the brain writes it as steps, Kaivra checks every step before keeping it
             String raw = generate(prompt(question, new ArrayList<>(), null, LEARN_HINT), 300, 0.2f, null);
-            String skill = skillJson(clean(raw));
+            String skill = skillJson(clean(raw), question);
             String text;
             if (skill == null) {
                 text = "I could not turn that into a skill. Tell me the words you will say and what I should do, for "
@@ -567,7 +657,6 @@ public final class KaivraMind implements AutoCloseable {
                 }
                 text = rules.size() + notes.size() < before ? "Done. I have forgotten that." : "I had nothing like that to forget.";
             }
-            primedFor = "";
             if (listener != null) listener.onText(text);
             return new Answer(text, "rule", sources);
         }
@@ -648,7 +737,7 @@ public final class KaivraMind implements AutoCloseable {
     /** Forgets the conversation held in the engine's memory. */
     public synchronized void reset() {
         if (handle != 0) nativeReset(handle);
-        primedFor = "";
+        primed = false;
     }
 
     @Override
