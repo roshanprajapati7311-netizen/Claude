@@ -11,6 +11,7 @@ Create a short motivational line for my morning.
 Tell me about the Hooghly River || The Hooghly River is a distributary of the Ganges in West Bengal, India, about 260 km long. Kolkata lies on its banks.
 ---
 Mujhe dosti par ek chhoti si shayari sunao.
+Will it rain in Mumbai tomorrow?
 Explain in simple words how a rocket reaches space.
 What is the latest news about artificial intelligence this week?
 Kaivra, what's in the news today?

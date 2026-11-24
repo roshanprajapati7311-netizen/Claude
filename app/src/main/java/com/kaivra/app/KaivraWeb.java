@@ -9,9 +9,15 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,13 +39,13 @@ public final class KaivraWeb {
 
     static String get(String url, int maxBytes) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
-        c.setConnectTimeout(8000);
-        c.setReadTimeout(10000);
+        c.setConnectTimeout(6000);
+        c.setReadTimeout(8000);
         c.setInstanceFollowRedirects(true);
         c.setRequestProperty("User-Agent", AGENT);
         c.setRequestProperty("Accept-Language", "en");
         int code = c.getResponseCode();
-        if (code < 200 || code > 299) throw new IOException("HTTP " + code);
+        if (code < 200 || code > 299 || code == 202) throw new IOException("HTTP " + code);   // 202: a service turning robots away
         try (InputStream in = c.getInputStream()) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buf = new byte[16384];
@@ -137,6 +143,45 @@ public final class KaivraWeb {
         return href;
     }
 
+    /** Services that just failed rest for ten minutes, so Kaivra does not wait for them on every question. */
+    private static final Map<String, Long> RESTING = new ConcurrentHashMap<>();
+
+    private static boolean resting(String name) {
+        Long until = RESTING.get(name);
+        return until != null && System.currentTimeMillis() < until;
+    }
+
+    private static void rest(String name) { RESTING.put(name, System.currentTimeMillis() + 10 * 60_000L); }
+
+    private static final Set<String> STOP = new HashSet<>(Arrays.asList(("what whats who whom whose which when where why how "
+        + "the and for are was were is isn this that these those with from about into most more recent latest newest today "
+        + "tonight tomorrow current currently now tell give show please kaivra news week month year does did can could would "
+        + "you your have has had will any some all there their its it's i'm me my our who's what's ki ka ke hai aaj").split(" ")));
+
+    /** The words of a query that matter (not question words and fillers). */
+    static List<String> keywords(String query) {
+        List<String> k = new ArrayList<>();
+        for (String w : query.toLowerCase().split("[^\\p{L}\\p{N}']+")) {
+            if (w.length() >= 3 && !STOP.contains(w) && !k.contains(w)) k.add(w);
+        }
+        return k;
+    }
+
+    /** Keeps the results that are about the query: enough of its words appear in the title or the text. */
+    static List<Found> relevant(List<Found> found, String query) {
+        List<String> k = keywords(query);
+        if (k.isEmpty()) return found;
+        int need = Math.max(1, (k.size() + 2) / 3);
+        List<Found> out = new ArrayList<>();
+        for (Found f : found) {
+            String t = (f.title + " " + f.text).toLowerCase();
+            int hits = 0;
+            for (String w : k) if (t.contains(w)) hits++;
+            if (hits >= need) out.add(f);
+        }
+        return out;
+    }
+
     private static List<Found> duckDuckGo(String query, int max) throws IOException {
         List<Found> out = new ArrayList<>();
         Matcher m = DDG_RESULT.matcher(get("https://html.duckduckgo.com/html/?q=" + enc(query), 600_000));
@@ -198,12 +243,14 @@ public final class KaivraWeb {
     public static List<Found> searchWeb(String query, int max, List<String> via) {
         String[] names = {"DuckDuckGo", "DuckDuckGo Lite", "Bing"};
         for (int i = 0; i < names.length; i++) {
+            if (resting(names[i])) continue;
             try {
-                List<Found> r = i == 0 ? duckDuckGo(query, max) : i == 1 ? duckDuckGoLite(query, max)
-                    : feed("https://www.bing.com/search?format=rss&mkt=en-IN&q=" + enc(query), max, false);
-                if (!r.isEmpty()) { via.add(names[i]); return r; }
+                List<Found> r = i == 0 ? duckDuckGo(query, max + 3) : i == 1 ? duckDuckGoLite(query, max + 3)
+                    : feed("https://www.bing.com/search?format=rss&mkt=en-IN&q=" + enc(query), max + 5, false);
+                r = relevant(r, query);   // Bing's feed sometimes answers with pages about something else entirely
+                if (!r.isEmpty()) { via.add(names[i]); return r.size() > max ? r.subList(0, max) : r; }
             } catch (Exception e) {
-                // this one did not answer: try the next
+                rest(names[i]);   // this one did not answer: try the next, and leave it alone for a while
             }
         }
         return new ArrayList<>();
@@ -216,23 +263,124 @@ public final class KaivraWeb {
         + "regarding|this|week|today|today's|tonight|right|now|tell|me|give|show|please|kaivra|happening|happened|going|"
         + "there|in the world|aaj|ki|ka|ke|khabar|taza)\\b|[?!.,]");
 
-    /** Recent news with dates (Bing News, then Google News); with no topic, today's top stories. */
+    /** Recent news with dates (Bing News, then Google News); with no topic, today's top stories (Google News first). */
     public static List<Found> searchNews(String query, int max, List<String> via) {
         String topic = NEWS_FILLER.matcher(query).replaceAll(" ").replaceAll("\\s+", " ").trim();
-        String[] names = {"Bing News", "Google News"};
-        for (int i = 0; i < names.length; i++) {
+        String[] names = topic.isEmpty() ? new String[]{"Google News", "Bing News"} : new String[]{"Bing News", "Google News"};
+        for (String name : names) {
+            if (resting(name)) continue;
             try {
-                String url = i == 0
-                    ? "https://www.bing.com/news/search?format=rss&mkt=en-IN&q=" + enc(topic.isEmpty() ? "top stories" : topic)
+                String url = name.equals("Bing News")
+                    ? "https://www.bing.com/news/search?format=rss&mkt=en-IN&q=" + enc(topic.isEmpty() ? "India top news" : topic)
                     : topic.isEmpty() ? "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"
                     : "https://news.google.com/rss/search?hl=en-IN&gl=IN&ceid=IN:en&q=" + enc(topic);
-                List<Found> r = feed(url, max, true);
-                if (!r.isEmpty()) { via.add(names[i]); return r; }
+                List<Found> r = feed(url, max + 4, true);
+                if (!topic.isEmpty()) r = relevant(r, topic);
+                if (!r.isEmpty()) { via.add(name); return r.size() > max ? r.subList(0, max) : r; }
             } catch (Exception e) {
-                // try the next
+                rest(name);
             }
         }
         return new ArrayList<>();
+    }
+
+    // ---------------- weather (Open-Meteo: free, no key; data CC BY 4.0) ----------------
+
+    private static final Pattern WHEN_WORDS = Pattern.compile(
+        "(?i)\\b(right now|today|tomorrow|tonight|now|currently|this week(end)?|abhi|aaj|kal|like|kaisa hai|kaisa|kaise|hai|"
+        + "going to be|be)\\b");
+    private static final Pattern PLACE_AFTER = Pattern.compile("(?i)\\b(?:in|at|for|of|near)\\s+([\\p{L}][\\p{L} .'-]{1,40})$");
+    private static final Pattern PLACE_BEFORE = Pattern.compile(
+        "(?i)([\\p{L}][\\p{L}.'-]*(?:\\s+[\\p{L}][\\p{L}.'-]*)?)\\s+(?:(?:ka|ki|ke)\\s+)?(?:weather|temperature|forecast|mausam)\\b");
+    private static final Set<String> NOT_PLACE = new HashSet<>(Arrays.asList(("what whats what's is the how how's hows tell me "
+        + "kaivra current today's s will it rain weather temperature forecast mausam ka ki ke my our here there outside").split(" ")));
+
+    /** The place a weather question is about ("" if it names none). */
+    static String weatherPlace(String question) {
+        String s = WHEN_WORDS.matcher(question.replaceAll("[?!.,]", " ")).replaceAll(" ").replaceAll("\\s+", " ").trim();
+        Matcher m = PLACE_AFTER.matcher(s);
+        String raw = m.find() ? m.group(1) : "";
+        if (raw.isEmpty()) {
+            m = PLACE_BEFORE.matcher(s);
+            if (m.find()) raw = m.group(1);
+        }
+        StringBuilder b = new StringBuilder();
+        for (String w : raw.trim().split("\\s+")) {
+            if (!w.isEmpty() && !NOT_PLACE.contains(w.toLowerCase())) b.append(b.length() > 0 ? " " : "").append(w);
+        }
+        return b.toString();
+    }
+
+    private static final String[][] SKY = {
+        {"0", "clear sky"}, {"1", "mainly clear"}, {"2", "partly cloudy"}, {"3", "overcast"}, {"45", "fog"}, {"48", "fog"},
+        {"51", "light drizzle"}, {"53", "drizzle"}, {"55", "heavy drizzle"}, {"56", "freezing drizzle"}, {"57", "freezing drizzle"},
+        {"61", "light rain"}, {"63", "rain"}, {"65", "heavy rain"}, {"66", "freezing rain"}, {"67", "freezing rain"},
+        {"71", "light snow"}, {"73", "snow"}, {"75", "heavy snow"}, {"77", "snow grains"}, {"80", "light showers"},
+        {"81", "showers"}, {"82", "heavy showers"}, {"85", "snow showers"}, {"86", "heavy snow showers"},
+        {"95", "thunderstorms"}, {"96", "thunderstorms with hail"}, {"99", "thunderstorms with hail"}};
+
+    static String sky(Object code) {
+        String c = code instanceof Double ? String.valueOf(((Double) code).intValue()) : String.valueOf(code);
+        for (String[] k : SKY) if (k[0].equals(c)) return k[1];
+        return "mixed weather";
+    }
+
+    private static String deg(Object v) {
+        return v instanceof Double ? Math.round((Double) v) + " degrees Celsius" : "unknown";
+    }
+
+    private static Object day(Object daily, String key, int i) {
+        List<?> l = MiniJson.list(MiniJson.at(daily, key));
+        return i < l.size() ? l.get(i) : null;
+    }
+
+    /** Current weather and the next days' forecast for the place the question names, or "" (no place, or offline). */
+    public static String weather(String question, List<Found> sources) {
+        String place = weatherPlace(question);
+        if (place.isEmpty()) return "";
+        try {
+            List<?> hits = MiniJson.list(MiniJson.at(MiniJson.parse(get("https://geocoding-api.open-meteo.com/v1/search?count=1"
+                + "&language=en&format=json&name=" + enc(place), 100_000)), "results"));
+            if (hits.isEmpty()) return "";
+            Object g = hits.get(0);
+            Object lat = MiniJson.at(g, "latitude"), lon = MiniJson.at(g, "longitude");
+            if (!(lat instanceof Double) || !(lon instanceof Double)) return "";
+            StringBuilder name = new StringBuilder(String.valueOf(MiniJson.at(g, "name")));
+            for (String k : new String[]{"admin1", "country"}) {
+                Object v = MiniJson.at(g, k);
+                if (v instanceof String && !name.toString().contains((String) v)) name.append(", ").append(v);
+            }
+            Object w = MiniJson.parse(get(String.format(java.util.Locale.ROOT,
+                "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&timezone=auto&forecast_days=3"
+                + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m"
+                + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+                (Double) lat, (Double) lon), 100_000));
+            Object now = MiniJson.at(w, "current"), daily = MiniJson.at(w, "daily");
+            StringBuilder b = new StringBuilder("Weather for ").append(name).append(" (live data from Open-Meteo");
+            Object time = MiniJson.at(now, "time");
+            if (time instanceof String && ((String) time).length() >= 16) b.append(", local time ").append(((String) time).substring(11, 16));
+            b.append("). Now: ").append(deg(MiniJson.at(now, "temperature_2m"))).append(", feels like ")
+                .append(deg(MiniJson.at(now, "apparent_temperature"))).append(", ").append(sky(MiniJson.at(now, "weather_code")));
+            Object hum = MiniJson.at(now, "relative_humidity_2m"), wind = MiniJson.at(now, "wind_speed_10m");
+            if (hum instanceof Double) b.append(", humidity ").append(Math.round((Double) hum)).append(" percent");
+            if (wind instanceof Double) b.append(", wind ").append(Math.round((Double) wind)).append(" kilometres an hour");
+            b.append('.');
+            String[] days = {"Today", "Tomorrow", "The day after"};
+            for (int i = 0; i < 3; i++) {
+                Object hi = day(daily, "temperature_2m_max", i), lo = day(daily, "temperature_2m_min", i);
+                if (!(hi instanceof Double)) break;
+                b.append(' ').append(days[i]).append(": ").append(sky(day(daily, "weather_code", i))).append(", ")
+                    .append(deg(lo).replace(" degrees Celsius", "")).append(" to ").append(deg(hi));
+                Object rain = day(daily, "precipitation_probability_max", i);
+                if (rain instanceof Double) b.append(", chance of rain ").append(Math.round((Double) rain)).append(" percent");
+                b.append('.');
+            }
+            sources.add(new Found("Open-Meteo weather for " + name, "https://open-meteo.com/", ""));
+            lastVia = "Open-Meteo";
+            return b.toString();
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     /** Wikipedia: the opening of the best-matching article(s). */
@@ -282,40 +430,52 @@ public final class KaivraWeb {
      */
     public static String notes(String query, int maxChars, List<Found> sources) { return notes(query, maxChars, sources, false); }
 
-    /** With recent, the newest news on the subject comes first, each with its date. */
+    /** With recent, the newest news on the subject comes first, each with its date. News, web and Wikipedia are asked at once. */
     public static String notes(String query, int maxChars, List<Found> sources, boolean recent) {
-        StringBuilder b = new StringBuilder();
-        List<String> via = new ArrayList<>();
-        if (recent) {
-            for (Found f : searchNews(query, 4, via)) {
-                b.append("- News: ").append(f.title).append(f.text.isEmpty() ? "" : " (" + f.text + ")").append('\n');
-                sources.add(f);
-            }
+        List<String> via = Collections.synchronizedList(new ArrayList<>());
+        AtomicReference<List<Found>> news = new AtomicReference<>(new ArrayList<>());
+        AtomicReference<List<Found>> web = new AtomicReference<>(new ArrayList<>());
+        AtomicReference<List<Found>> wiki = new AtomicReference<>(new ArrayList<>());
+        List<Thread> asks = new ArrayList<>();
+        if (recent) asks.add(new Thread(() -> news.set(searchNews(query, 4, via))));
+        asks.add(new Thread(() -> web.set(searchWeb(query, 5, via))));
+        asks.add(new Thread(() -> wiki.set(relevant(searchWikipedia(query, 1), query))));
+        for (Thread t : asks) { t.setDaemon(true); t.start(); }
+        long deadline = System.currentTimeMillis() + 20_000;
+        for (Thread t : asks) {
+            try { t.join(Math.max(1, deadline - System.currentTimeMillis())); } catch (InterruptedException e) { break; }
         }
-        List<Found> web = searchWeb(query, 5, via);
-        for (Found f : web) {
+
+        StringBuilder b = new StringBuilder();
+        for (Found f : news.get()) {
+            b.append("- News: ").append(f.title).append(f.text.isEmpty() ? "" : " (" + f.text + ")").append('\n');
+            sources.add(f);
+        }
+        for (Found f : web.get()) {
             if (f.text.isEmpty()) continue;
             b.append("- ").append(f.title).append(": ").append(f.text).append('\n');
             sources.add(f);
         }
-        // the first page that reads well, for details the snippets leave out
-        for (Found f : web) {
-            if (b.length() > maxChars * 2 / 3) break;
+        // the first page that reads well, for details the snippets leave out (two tries at most)
+        int tries = 0;
+        for (Found f : web.get()) {
+            if (b.length() > maxChars * 2 / 3 || tries >= 2) break;
             if (f.url.contains("youtube.com") || f.url.endsWith(".pdf")) continue;
+            tries++;
             String page = read(f.url, Math.min(1800, maxChars - b.length()));
             if (page.length() > 200) {
                 b.append("From ").append(f.title).append(": ").append(page.replace('\n', ' ')).append('\n');
                 break;
             }
         }
-        if (b.length() < maxChars * 3 / 4) {
-            for (Found w : searchWikipedia(query, 1)) {
+        if (b.length() < maxChars * 3 / 4 && news.get().isEmpty()) {
+            for (Found w : wiki.get()) {
                 b.append("Wikipedia, ").append(w.title).append(": ").append(w.text.replace('\n', ' ')).append('\n');
                 sources.add(w);
                 via.add("Wikipedia");
             }
         }
-        lastVia = String.join(", ", via);
+        synchronized (via) { lastVia = String.join(", ", via); }
         String s = b.toString().trim();
         return s.length() > maxChars ? s.substring(0, maxChars) : s;
     }

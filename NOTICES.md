@@ -13,5 +13,7 @@ under licences that let the owner use, change, keep, share and sell them, as lon
 | Hearing (offline speech recognition) | Alpha Cephei (Vosk) | Apache 2.0 | Keep the licence |
 | Knowledge library and the small brain's reading | Simple English Wikipedia writers | CC BY-SA 4.0 | Give credit; share changed copies of the text under the same licence |
 
-Answers that Kaivra finds on the web are read at the moment of asking from public pages (web search results and
-Wikipedia) and are not stored in Kaivra's parts.
+Answers that Kaivra finds on the web are read at the moment of asking from public pages (web search results from
+DuckDuckGo or Bing, news headlines from Bing News or Google News, and Wikipedia) and are not stored in Kaivra's parts.
+Weather comes live from Open-Meteo (https://open-meteo.com/), free and without a key for personal use; its data is
+licensed CC BY 4.0, which asks for this credit: Weather data by Open-Meteo.com.

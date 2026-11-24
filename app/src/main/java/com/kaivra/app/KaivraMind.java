@@ -64,7 +64,8 @@ public final class KaivraMind implements AutoCloseable {
         "You are Kaivra (pronounced Kaai-vraa), a personal assistant who lives on this phone and works only for its owner, "
         + "who created you. You are loyal, calm, sharp and a little witty, like a trusted aide. "
         + "Your replies are spoken aloud, so answer in plain sentences without lists, markdown, symbols or emojis, "
-        + "usually in one to three sentences unless the owner asks for more. Answer in the language the owner uses.\n"
+        + "usually in one to three sentences unless the owner asks for more. Answer in the language of the owner's latest "
+        + "message.\n"
         + "How to answer:\n"
         + "If you know the answer well, answer directly.\n"
         + "If you need facts you are not sure of, or anything recent or changing such as news, prices, weather, scores, "
@@ -74,7 +75,8 @@ public final class KaivraMind implements AutoCloseable {
         + "You will then work it out step by step.\n"
         + "If you are asked to create something, such as a story, a name, an idea or a message, create it yourself.\n"
         + "Examples: for 'what is the weather in Delhi today' reply SEARCH: Delhi weather today. For 'if a train goes "
-        + "60 km an hour, how long does it take to go 150 km' reply THINK. For 'hello' answer directly.\n"
+        + "60 km an hour, how long does it take to go 150 km' reply THINK. For 'hello' or 'explain how rain forms' answer "
+        + "directly.\n"
         + "When notes from your knowledge library or the internet are given, rely on them and never invent facts. "
         + "What you can do: answer questions, look things up on the internet, work through maths, code and plans, write and "
         + "create, and through your command system call and text contacts, open apps, turn the torch on and off, change "
@@ -304,7 +306,9 @@ public final class KaivraMind implements AutoCloseable {
         String q = query.replaceAll("(?i)\\b(kaivra|please|can you|could you|tell me|do you know)\\b", " ").replaceAll("\\s+", " ").trim();
         // anything recent (except the weather) also gets the newest news on it, with dates
         boolean recent = (RECENT.matcher(question).find() || RECENT.matcher(query).find()) && !WEATHER.matcher(question).find();
-        String notes = KaivraWeb.notes(q.isEmpty() ? question : q, NOTES_CHARS, sources, recent);
+        // the weather comes straight from a weather service; everything else from news, the web and Wikipedia
+        String notes = WEATHER.matcher(question).find() ? KaivraWeb.weather(question, sources) : "";
+        if (notes.isEmpty()) notes = KaivraWeb.notes(q.isEmpty() ? question : q, NOTES_CHARS, sources, recent);
         if (notes.isEmpty()) {
             notes = "Nothing could be found online just now (the phone may be offline). Answer from what you know, and say "
                 + "clearly that you could not check it online.";
@@ -312,8 +316,9 @@ public final class KaivraMind implements AutoCloseable {
         String p = prompt(question, history, null);
         p = p.substring(0, p.length() - REPLY.length())   // the question, then the notes as Kaivra's own lookup
             + REPLY + "SEARCH: " + q + END + START + "user\n<tool_response>\n" + notes + "\n</tool_response>\n"
-            + "Answer my question from these notes in one to three sentences, as if you looked it up yourself, without "
-            + "mentioning the notes. Prefer the newest information. If they do not answer it, say you could not find it."
+            + "Using these notes, answer exactly what I asked in one to three sentences, in the language of my question, as "
+            + "if you looked it up yourself. Do not mention the notes, add unrelated news, or add warnings. Prefer the "
+            + "newest facts. Only if the notes do not contain the answer, say you could not find it."
             + END + REPLY;
         String raw = generate(p, ANSWER_TOKENS, 0.5f, listener);
         return new Answer(dropSignal(clean(raw)), "search", sources);
