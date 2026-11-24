@@ -43,6 +43,9 @@ import org.vosk.Recognizer
 import org.vosk.android.RecognitionListener
 import org.vosk.android.SpeechService
 import java.io.File
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Random
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -315,8 +318,122 @@ class MainActivity : Activity() {
             try { old?.close() } catch (e: Throwable) {}
             // 4 threads: the phone's four fast cores
             mind = try { packs.mindFile()?.let { KaivraMind.open(it.path, 4, KaivraMind.CONTEXT) } } catch (e: Throwable) { null }
+            mind?.let { md ->
+                md.setMemory(savedList("rules"), savedList("notes"))
+                md.setOwner(prefs.getString("owner.name", ""), prefs.getString("owner.call", ""))
+            }
             sendToPage("packs", packs.status().toString())
         }
+    }
+
+    // ---------- Kaivra's memory: the owner, rules and notes, kept only on this phone ----------
+
+    private fun savedList(key: String): List<String> {
+        val out = ArrayList<String>()
+        try {
+            val a = JSONArray(prefs.getString(key, "[]"))
+            for (i in 0 until a.length()) out.add(a.optString(i))
+        } catch (e: Exception) {}
+        return out
+    }
+
+    private fun saveList(key: String, items: List<String>) {
+        val a = JSONArray()
+        for (r in items) a.put(r)
+        prefs.edit().putString(key, a.toString()).apply()
+    }
+
+    private fun saveMemory(md: KaivraMind) {
+        saveList("rules", md.rules())
+        saveList("notes", md.notes())
+        val o = md.owner()
+        prefs.edit().putString("owner.name", o[0]).putString("owner.call", o[1]).apply()
+    }
+
+    /** Everything Kaivra remembers, in its structure: the owner, rules and notes (skills are added by the page). */
+    private fun memoryJson(): String {
+        val o = JSONObject()
+        o.put("owner", JSONObject().put("name", prefs.getString("owner.name", "")).put("call", prefs.getString("owner.call", "")))
+        o.put("rules", JSONArray(savedList("rules")))
+        o.put("notes", JSONArray(savedList("notes")))
+        return o.toString()
+    }
+
+    /** Removes one item the owner chose on the memory screen: kind is owner, rules or notes. */
+    private fun forgetMemory(kind: String, index: Int) {
+        when (kind) {
+            "owner" -> prefs.edit().putString("owner.name", "").putString("owner.call", "").apply()
+            "rules", "notes" -> {
+                val items = ArrayList(savedList(kind))
+                if (index in items.indices) items.removeAt(index)
+                saveList(kind, items)
+            }
+        }
+        brainExec.execute {
+            mind?.let { md ->
+                md.setMemory(savedList("rules"), savedList("notes"))
+                md.setOwner(prefs.getString("owner.name", ""), prefs.getString("owner.call", ""))
+            }
+        }
+    }
+
+    // ---------- skills: routines the owner teaches and plugins from the owner's GitHub ----------
+
+    private fun download(url: String, max: Int): String {
+        val c = URL(url).openConnection() as HttpURLConnection
+        c.connectTimeout = 10000
+        c.readTimeout = 15000
+        c.setRequestProperty("User-Agent", "Kaivra")
+        val code = c.responseCode
+        if (code !in 200..299) throw IOException("HTTP $code")
+        val bytes = c.inputStream.use { it.readBytes() }
+        return String(if (bytes.size > max) bytes.copyOf(max) else bytes, Charsets.UTF_8)
+    }
+
+    /** Downloads the plugins listed in skills/index.json on GitHub; the owner's own skills stay. Answers with a "skills" event. */
+    private fun fetchSkills() {
+        Thread {
+            val res = JSONObject()
+            try {
+                val index = JSONObject(download(SKILLS + "index.json", 200_000))
+                val have = JSONArray(prefs.getString("skills", "[]"))
+                val kept = JSONArray()
+                for (i in 0 until have.length()) {
+                    val sk = have.optJSONObject(i) ?: continue
+                    if (sk.optString("source") != "github") kept.put(sk)
+                }
+                val list = index.optJSONArray("skills") ?: JSONArray()
+                var added = 0
+                for (i in 0 until list.length()) {
+                    val e = list.optJSONObject(i) ?: continue
+                    val file = e.optString("file")
+                    if (!file.matches(Regex("[A-Za-z0-9_-]+\\.js"))) continue
+                    val code = download(SKILLS + file, 200_000)
+                    kept.put(JSONObject().put("name", e.optString("name", file.removeSuffix(".js"))).put("kind", "plugin")
+                        .put("source", "github").put("about", e.optString("about")).put("code", code))
+                    added++
+                }
+                prefs.edit().putString("skills", kept.toString()).apply()
+                res.put("ok", true).put("added", added).put("total", kept.length())
+            } catch (e: Exception) {
+                res.put("ok", false).put("error", if (e.message == "HTTP 404") "none" else "offline")
+            }
+            sendToPage("skills", res.toString())
+        }.start()
+    }
+
+    /** A web page or API a skill asked for (https only); the answer arrives as an "http" event with the same id. */
+    private fun httpGet(id: Int, url: String) {
+        Thread {
+            val res = JSONObject().put("id", id)
+            try {
+                if (!url.startsWith("https://")) throw IOException("https only")
+                res.put("ok", true).put("text", download(url, 1_000_000))
+            } catch (e: Exception) {
+                res.put("ok", false).put("error", e.message ?: "offline")
+            }
+            sendToPage("http", res.toString())
+        }.start()
     }
 
     private fun think(payload: String) {
@@ -341,6 +458,8 @@ class MainActivity : Activity() {
                 if (md != null) {
                     // the thinking brain: answers, searches the web, or thinks it through
                     val ans = md.answer(question, history, fact, null)
+                    if (ans.how == "rule" || ans.how == "note") saveMemory(md)
+                    ans.skill?.let { out.put("skill", it) }
                     text = ans.text
                     out.put("how", ans.how)
                     if (ans.sources.isNotEmpty()) out.put("web", ans.sources[0].title)
@@ -545,6 +664,30 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun downloadPacks() { packs.download() }
 
+        /** Everything Kaivra remembers about the owner (owner, rules, notes) as JSON. */
+        @JavascriptInterface
+        fun memory(): String = memoryJson()
+
+        /** Removes one remembered item; returns the memory as it is now. */
+        @JavascriptInterface
+        fun forget(kind: String, index: Int): String {
+            forgetMemory(kind, index)
+            return memoryJson()
+        }
+
+        /** Kaivra's skills (routines the owner taught and plugins from GitHub) as JSON. */
+        @JavascriptInterface
+        fun skills(): String = prefs.getString("skills", "[]") ?: "[]"
+
+        @JavascriptInterface
+        fun saveSkills(json: String) { prefs.edit().putString("skills", json).apply() }
+
+        @JavascriptInterface
+        fun fetchSkills() { this@MainActivity.fetchSkills() }
+
+        @JavascriptInterface
+        fun httpGet(id: Int, url: String) { this@MainActivity.httpGet(id, url) }
+
         /** Asks Kaivra's own brain; the answer arrives as a "brain" event. */
         @JavascriptInterface
         fun think(payload: String) { this@MainActivity.think(payload) }
@@ -732,6 +875,8 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        /** Where Kaivra's plugins live: the skills folder of the owner's GitHub repository. */
+        const val SKILLS = "https://raw.githubusercontent.com/roshanprajapati7311-netizen/Claude/main/skills/"
         private const val REQ_MIC = 7
         private const val REQ_ACCESS = 8
     }
