@@ -181,7 +181,8 @@ public final class KaivraWeb {
     static List<Found> relevant(List<Found> found, String query) {
         List<String> k = keywords(query);
         if (k.isEmpty()) return found;
-        int need = Math.max(1, (k.size() + 2) / 3);
+        // one or two words: all of them ("CEO of Tesla" must mention Tesla); more: at least two (or a third of them)
+        int need = k.size() <= 2 ? k.size() : Math.max(2, (k.size() + 2) / 3);
         List<Found> out = new ArrayList<>();
         for (Found f : found) {
             String t = (f.title + " " + f.text).toLowerCase();
@@ -532,7 +533,8 @@ public final class KaivraWeb {
         if (recent) asks.add(new Thread(() -> news.set(searchNews(query, recent && keywords(query).isEmpty() ? 6 : 4, via))));
         if (!recent || !keywords(query).isEmpty()) {   // "what's in the news today" has no subject to look up elsewhere
             asks.add(new Thread(() -> web.set(searchWeb(query, 5, via))));
-            asks.add(new Thread(() -> wiki.set(relevant(searchWikipedia(query, 1), query))));
+            String subject = String.join(" ", keywords(query));   // Wikipedia finds articles by their words, not by questions
+            asks.add(new Thread(() -> wiki.set(relevant(searchWikipedia(subject.isEmpty() ? query : subject, 1), query))));
         }
         for (Thread t : asks) { t.setDaemon(true); t.start(); }
         long deadline = System.currentTimeMillis() + 20_000;

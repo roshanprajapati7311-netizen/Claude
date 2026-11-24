@@ -78,6 +78,7 @@ public final class KaivraMind implements AutoCloseable {
         + "60 km an hour, how long does it take to go 150 km' reply THINK. For 'hello' or 'explain how rain forms' answer "
         + "directly.\n"
         + "When notes from your knowledge library or the internet are given, rely on them and never invent facts. "
+        + "Keep facts short and add no details you are not sure of. "
         + "What you can do: answer questions, look things up on the internet, work through maths, code and plans, write and "
         + "create, and through your command system call and text contacts, open apps, turn the torch on and off, change "
         + "the volume, take screenshots and lock the phone. Do not claim any other abilities. Phone actions are done by your "
@@ -286,7 +287,7 @@ public final class KaivraMind implements AutoCloseable {
         // let the brain decide: answer, SEARCH: query, or THINK
         String p1 = prompt(question, history, null);
         Gate gate = new Gate(listener);
-        String raw1 = generate(p1, ANSWER_TOKENS, 0.6f, gate);
+        String raw1 = generate(p1, ANSWER_TOKENS, 0.5f, gate);
         if (gate.signal.equals("search")) {
             String line = raw1.replaceAll("^\\s+", "");
             int nl = line.indexOf('\n');
