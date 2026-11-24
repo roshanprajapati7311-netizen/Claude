@@ -129,6 +129,13 @@ public final class KaivraWeb {
     /** Which search services answered the last notes() call (for GitHub's tests). */
     public static volatile String lastVia = "";
 
+    /** What went wrong in recent searches ("service: reason"), for GitHub's tests; whoever reads it clears it. */
+    public static final List<String> trouble = Collections.synchronizedList(new ArrayList<>());
+
+    static void trouble(String name, Exception e) {
+        trouble.add(name + ": " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " " + e.getMessage()));
+    }
+
     /** The real address behind a search service's redirect link. */
     static String target(String href, String param) {
         href = unescape(href);
@@ -156,7 +163,8 @@ public final class KaivraWeb {
     private static final Set<String> STOP = new HashSet<>(Arrays.asList(("what whats who whom whose which when where why how "
         + "the and for are was were is isn this that these those with from about into most more recent latest newest today "
         + "tonight tomorrow current currently now tell give show please kaivra news week month year does did can could would "
-        + "you your have has had will any some all there their its it's i'm me my our who's what's ki ka ke hai aaj").split(" ")));
+        + "you your have has had will any some all there their its it's i'm me my our who's what's ki ka ke hai aaj "
+        + "stories story headlines headline").split(" ")));
 
     /** The words of a query that matter (not question words and fillers). */
     static List<String> keywords(String query) {
@@ -250,6 +258,7 @@ public final class KaivraWeb {
                 r = relevant(r, query);   // Bing's feed sometimes answers with pages about something else entirely
                 if (!r.isEmpty()) { via.add(names[i]); return r.size() > max ? r.subList(0, max) : r; }
             } catch (Exception e) {
+                trouble(names[i], e);
                 rest(names[i]);   // this one did not answer: try the next, and leave it alone for a while
             }
         }
@@ -261,11 +270,13 @@ public final class KaivraWeb {
     private static final Pattern NEWS_FILLER = Pattern.compile(
         "(?i)\\b(what|what's|whats|is|are|was|were|the|a|an|any|latest|newest|recent|news|headlines?|updates?|about|on|"
         + "regarding|this|week|today|today's|tonight|right|now|tell|me|give|show|please|kaivra|happening|happened|going|"
-        + "there|in the world|aaj|ki|ka|ke|khabar|taza)\\b|[?!.,]");
+        + "there|in the world|in|of|for|to|and|from|at|by|top|big|biggest|important|major|main|stories|story|all|"
+        + "aaj|ki|ka|ke|khabar|taza)\\b|[?!.,]");
 
     /** Recent news with dates (Bing News, then Google News); with no topic, today's top stories (Google News first). */
     public static List<Found> searchNews(String query, int max, List<String> via) {
         String topic = NEWS_FILLER.matcher(query).replaceAll(" ").replaceAll("\\s+", " ").trim();
+        if (keywords(topic).isEmpty()) topic = "";   // nothing but small words left: today's top stories
         String[] names = topic.isEmpty() ? new String[]{"Google News", "Bing News"} : new String[]{"Bing News", "Google News"};
         for (String name : names) {
             if (resting(name)) continue;
@@ -278,6 +289,7 @@ public final class KaivraWeb {
                 if (!topic.isEmpty()) r = relevant(r, topic);
                 if (!r.isEmpty()) { via.add(name); return r.size() > max ? r.subList(0, max) : r; }
             } catch (Exception e) {
+                trouble(name, e);
                 rest(name);
             }
         }
@@ -334,53 +346,123 @@ public final class KaivraWeb {
         return i < l.size() ? l.get(i) : null;
     }
 
-    /** Current weather and the next days' forecast for the place the question names, or "" (no place, or offline). */
+    /**
+     * Current weather and the next days' forecast for the place the question names, or "" (no place, or offline):
+     * Open-Meteo first, then wttr.in if Open-Meteo does not answer.
+     */
     public static String weather(String question, List<Found> sources) {
         String place = weatherPlace(question);
         if (place.isEmpty()) return "";
-        try {
-            List<?> hits = MiniJson.list(MiniJson.at(MiniJson.parse(get("https://geocoding-api.open-meteo.com/v1/search?count=1"
-                + "&language=en&format=json&name=" + enc(place), 100_000)), "results"));
-            if (hits.isEmpty()) return "";
-            Object g = hits.get(0);
-            Object lat = MiniJson.at(g, "latitude"), lon = MiniJson.at(g, "longitude");
-            if (!(lat instanceof Double) || !(lon instanceof Double)) return "";
-            StringBuilder name = new StringBuilder(String.valueOf(MiniJson.at(g, "name")));
-            for (String k : new String[]{"admin1", "country"}) {
-                Object v = MiniJson.at(g, k);
-                if (v instanceof String && !name.toString().contains((String) v)) name.append(", ").append(v);
+        if (!resting("Open-Meteo")) {
+            try {
+                String w = openMeteo(place, sources);
+                if (!w.isEmpty()) { lastVia = "Open-Meteo"; return w; }
+            } catch (Exception e) {
+                trouble("Open-Meteo", e);
+                rest("Open-Meteo");
             }
-            Object w = MiniJson.parse(get(String.format(java.util.Locale.ROOT,
-                "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&timezone=auto&forecast_days=3"
-                + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m"
-                + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
-                (Double) lat, (Double) lon), 100_000));
-            Object now = MiniJson.at(w, "current"), daily = MiniJson.at(w, "daily");
-            StringBuilder b = new StringBuilder("Weather for ").append(name).append(" (live data from Open-Meteo");
-            Object time = MiniJson.at(now, "time");
-            if (time instanceof String && ((String) time).length() >= 16) b.append(", local time ").append(((String) time).substring(11, 16));
-            b.append("). Now: ").append(deg(MiniJson.at(now, "temperature_2m"))).append(", feels like ")
-                .append(deg(MiniJson.at(now, "apparent_temperature"))).append(", ").append(sky(MiniJson.at(now, "weather_code")));
-            Object hum = MiniJson.at(now, "relative_humidity_2m"), wind = MiniJson.at(now, "wind_speed_10m");
-            if (hum instanceof Double) b.append(", humidity ").append(Math.round((Double) hum)).append(" percent");
-            if (wind instanceof Double) b.append(", wind ").append(Math.round((Double) wind)).append(" kilometres an hour");
-            b.append('.');
-            String[] days = {"Today", "Tomorrow", "The day after"};
-            for (int i = 0; i < 3; i++) {
-                Object hi = day(daily, "temperature_2m_max", i), lo = day(daily, "temperature_2m_min", i);
-                if (!(hi instanceof Double)) break;
-                b.append(' ').append(days[i]).append(": ").append(sky(day(daily, "weather_code", i))).append(", ")
-                    .append(deg(lo).replace(" degrees Celsius", "")).append(" to ").append(deg(hi));
-                Object rain = day(daily, "precipitation_probability_max", i);
-                if (rain instanceof Double) b.append(", chance of rain ").append(Math.round((Double) rain)).append(" percent");
-                b.append('.');
-            }
-            sources.add(new Found("Open-Meteo weather for " + name, "https://open-meteo.com/", ""));
-            lastVia = "Open-Meteo";
-            return b.toString();
-        } catch (Exception e) {
-            return "";
         }
+        if (!resting("wttr.in")) {
+            try {
+                String w = wttr(place, sources);
+                if (!w.isEmpty()) { lastVia = "wttr.in"; return w; }
+            } catch (Exception e) {
+                trouble("wttr.in", e);
+                rest("wttr.in");
+            }
+        }
+        return "";
+    }
+
+    private static String openMeteo(String place, List<Found> sources) throws IOException {
+        List<?> hits = MiniJson.list(MiniJson.at(MiniJson.parse(get("https://geocoding-api.open-meteo.com/v1/search?count=1"
+            + "&language=en&format=json&name=" + enc(place), 100_000)), "results"));
+        if (hits.isEmpty()) return "";
+        Object g = hits.get(0);
+        Object lat = MiniJson.at(g, "latitude"), lon = MiniJson.at(g, "longitude");
+        if (!(lat instanceof Double) || !(lon instanceof Double)) return "";
+        StringBuilder name = new StringBuilder(String.valueOf(MiniJson.at(g, "name")));
+        for (String k : new String[]{"admin1", "country"}) {
+            Object v = MiniJson.at(g, k);
+            if (v instanceof String && !name.toString().contains((String) v)) name.append(", ").append(v);
+        }
+        Object w = MiniJson.parse(get(String.format(java.util.Locale.ROOT,
+            "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&timezone=auto&forecast_days=3"
+            + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m"
+            + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+            (Double) lat, (Double) lon), 100_000));
+        Object now = MiniJson.at(w, "current"), daily = MiniJson.at(w, "daily");
+        if (now == null) return "";
+        StringBuilder b = new StringBuilder("Weather for ").append(name).append(" (live data from Open-Meteo");
+        Object time = MiniJson.at(now, "time");
+        if (time instanceof String && ((String) time).length() >= 16) b.append(", local time ").append(((String) time).substring(11, 16));
+        b.append("). Now: ").append(deg(MiniJson.at(now, "temperature_2m"))).append(", feels like ")
+            .append(deg(MiniJson.at(now, "apparent_temperature"))).append(", ").append(sky(MiniJson.at(now, "weather_code")));
+        Object hum = MiniJson.at(now, "relative_humidity_2m"), wind = MiniJson.at(now, "wind_speed_10m");
+        if (hum instanceof Double) b.append(", humidity ").append(Math.round((Double) hum)).append(" percent");
+        if (wind instanceof Double) b.append(", wind ").append(Math.round((Double) wind)).append(" kilometres an hour");
+        b.append('.');
+        String[] days = {"Today", "Tomorrow", "The day after"};
+        for (int i = 0; i < 3; i++) {
+            Object hi = day(daily, "temperature_2m_max", i), lo = day(daily, "temperature_2m_min", i);
+            if (!(hi instanceof Double)) break;
+            b.append(' ').append(days[i]).append(": ").append(sky(day(daily, "weather_code", i))).append(", ")
+                .append(deg(lo).replace(" degrees Celsius", "")).append(" to ").append(deg(hi));
+            Object rain = day(daily, "precipitation_probability_max", i);
+            if (rain instanceof Double) b.append(", chance of rain ").append(Math.round((Double) rain)).append(" percent");
+            b.append('.');
+        }
+        sources.add(new Found("Open-Meteo weather for " + name, "https://open-meteo.com/", ""));
+        return b.toString();
+    }
+
+    /** The first "value" of a wttr.in list such as weatherDesc or areaName. */
+    private static String wv(Object o, String key) {
+        List<?> l = MiniJson.list(MiniJson.at(o, key));
+        Object v = l.isEmpty() ? null : MiniJson.at(l.get(0), "value");
+        return v instanceof String ? ((String) v).trim() : "";
+    }
+
+    private static String ws(Object o, String key) {
+        Object v = MiniJson.at(o, key);
+        return v instanceof String ? (String) v : v instanceof Double ? String.valueOf(Math.round((Double) v)) : "";
+    }
+
+    private static String wttr(String place, List<Found> sources) throws IOException {
+        Object w = MiniJson.parse(get("https://wttr.in/" + enc(place).replace("+", "%20") + "?format=j1", 400_000));
+        List<?> cur = MiniJson.list(MiniJson.at(w, "current_condition"));
+        if (cur.isEmpty()) return "";
+        Object now = cur.get(0);
+        List<?> area = MiniJson.list(MiniJson.at(w, "nearest_area"));
+        StringBuilder name = new StringBuilder(place);
+        if (!area.isEmpty()) {
+            String region = wv(area.get(0), "region"), country = wv(area.get(0), "country");
+            if (!region.isEmpty() && !region.equalsIgnoreCase(place)) name.append(", ").append(region);
+            if (!country.isEmpty()) name.append(", ").append(country);
+        }
+        StringBuilder b = new StringBuilder("Weather for ").append(name).append(" (live data from wttr.in");
+        String obs = ws(now, "localObsDateTime");
+        if (obs.length() >= 16) b.append(", observed ").append(obs.substring(11));
+        b.append("). Now: ").append(ws(now, "temp_C")).append(" degrees Celsius, feels like ").append(ws(now, "FeelsLikeC"))
+            .append(" degrees Celsius, ").append(wv(now, "weatherDesc").toLowerCase())
+            .append(", humidity ").append(ws(now, "humidity")).append(" percent, wind ").append(ws(now, "windspeedKmph"))
+            .append(" kilometres an hour.");
+        String[] days = {"Today", "Tomorrow", "The day after"};
+        List<?> ahead = MiniJson.list(MiniJson.at(w, "weather"));
+        for (int i = 0; i < Math.min(3, ahead.size()); i++) {
+            Object d = ahead.get(i);
+            List<?> hours = MiniJson.list(MiniJson.at(d, "hourly"));
+            long rain = 0;
+            String noon = "";
+            for (int h = 0; h < hours.size(); h++) {
+                try { rain = Math.max(rain, Long.parseLong(ws(hours.get(h), "chanceofrain"))); } catch (NumberFormatException e) { /* skip */ }
+                if (h == hours.size() / 2) noon = wv(hours.get(h), "weatherDesc").toLowerCase();
+            }
+            b.append(' ').append(days[i]).append(": ").append(noon.isEmpty() ? "" : noon + ", ").append(ws(d, "mintempC"))
+                .append(" to ").append(ws(d, "maxtempC")).append(" degrees Celsius, chance of rain ").append(rain).append(" percent.");
+        }
+        sources.add(new Found("wttr.in weather for " + name, "https://wttr.in/", ""));
+        return b.toString();
     }
 
     /** Wikipedia: the opening of the best-matching article(s). */
@@ -410,7 +492,7 @@ public final class KaivraWeb {
                 }
             }
         } catch (Exception e) {
-            // offline or nothing found
+            trouble("Wikipedia", e);   // offline or nothing found
         }
         return out;
     }
@@ -437,9 +519,11 @@ public final class KaivraWeb {
         AtomicReference<List<Found>> web = new AtomicReference<>(new ArrayList<>());
         AtomicReference<List<Found>> wiki = new AtomicReference<>(new ArrayList<>());
         List<Thread> asks = new ArrayList<>();
-        if (recent) asks.add(new Thread(() -> news.set(searchNews(query, 4, via))));
-        asks.add(new Thread(() -> web.set(searchWeb(query, 5, via))));
-        asks.add(new Thread(() -> wiki.set(relevant(searchWikipedia(query, 1), query))));
+        if (recent) asks.add(new Thread(() -> news.set(searchNews(query, recent && keywords(query).isEmpty() ? 6 : 4, via))));
+        if (!recent || !keywords(query).isEmpty()) {   // "what's in the news today" has no subject to look up elsewhere
+            asks.add(new Thread(() -> web.set(searchWeb(query, 5, via))));
+            asks.add(new Thread(() -> wiki.set(relevant(searchWikipedia(query, 1), query))));
+        }
         for (Thread t : asks) { t.setDaemon(true); t.start(); }
         long deadline = System.currentTimeMillis() + 20_000;
         for (Thread t : asks) {

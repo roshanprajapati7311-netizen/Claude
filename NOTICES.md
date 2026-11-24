@@ -16,4 +16,5 @@ under licences that let the owner use, change, keep, share and sell them, as lon
 Answers that Kaivra finds on the web are read at the moment of asking from public pages (web search results from
 DuckDuckGo or Bing, news headlines from Bing News or Google News, and Wikipedia) and are not stored in Kaivra's parts.
 Weather comes live from Open-Meteo (https://open-meteo.com/), free and without a key for personal use; its data is
-licensed CC BY 4.0, which asks for this credit: Weather data by Open-Meteo.com.
+licensed CC BY 4.0, which asks for this credit: Weather data by Open-Meteo.com. When Open-Meteo does not answer, the
+weather comes from wttr.in (https://wttr.in/, a free public weather service).

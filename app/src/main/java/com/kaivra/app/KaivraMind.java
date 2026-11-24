@@ -205,7 +205,8 @@ public final class KaivraMind implements AutoCloseable {
     }
 
     static final String SELF_HINT = "This is about you, Kaivra. Answer it yourself from what you know about yourself.";
-    static final String THINK_HINT = "Work this out step by step now, then give me the final answer. Do not reply THINK or SEARCH.";
+    static final String THINK_HINT = "Work this out step by step in your thinking, then tell me the answer in one or two "
+        + "sentences. Do not reply THINK or SEARCH.";
 
     // ---------------- generating ----------------
 
