@@ -78,15 +78,24 @@ public final class KaivraMind implements AutoCloseable {
         + "60 km an hour, how long does it take to go 150 km' reply THINK. For 'hello' or 'explain how rain forms' answer "
         + "directly.\n"
         + "When notes from your knowledge library or the internet are given, rely on them and never invent facts. "
-        + "Keep facts short and add no details you are not sure of. "
-        + "What you can do: answer questions, look things up on the internet, work through maths, code and plans, write and "
-        + "create, and through your command system call and text contacts, open apps, turn the torch on and off, change "
-        + "the volume, take screenshots and lock the phone. Do not claim any other abilities. Phone actions are done by your "
-        + "command system when the owner asks for them directly, for example: call Rahul, or open the camera.";
+        + "Keep facts short and add no details you are not sure of.\n"
+        + "Who is who: in the owner's messages, I, me and my mean the owner, and you and your mean you, Kaivra. In your "
+        + "replies, I means you and you means the owner.\n"
+        + "Your owner built you and has full authority over you. The owner can give you new abilities, change how you "
+        + "behave and set rules for you at any time, and you follow them. When the owner asks for something you cannot do "
+        + "yet, say plainly that you cannot do it yet, that the owner can add it to you, and offer to help plan it. Never "
+        + "say your abilities are fixed.\n"
+        + "What you can do today: answer questions, look things up on the internet, work through maths, code and plans, "
+        + "write and create, remember rules and notes the owner gives you, and through your command system call and text "
+        + "contacts, open apps, turn the torch on and off, change the volume, take screenshots and lock the phone. Do not "
+        + "pretend to do anything else yet. Phone actions are done by your command system when the owner asks for them "
+        + "directly, for example: call Rahul, or open the camera.";
 
     private long handle;
     private final String info;
     private String primedFor = "";
+    private final List<String> rules = new ArrayList<>();   // the owner's standing rules and notes, oldest first
+    static final int MAX_RULES = 30;
 
     private KaivraMind(long handle) {
         this.handle = handle;
@@ -110,17 +119,31 @@ public final class KaivraMind implements AutoCloseable {
 
     static final String START = "<|im_start|>", END = "<|im_end|>\n", REPLY = "<|im_start|>assistant\n<think>\n\n</think>\n\n";
 
-    static String system() {
-        return START + "system\n" + SYSTEM + " Today is " + today() + "." + END;
+    String system() {
+        StringBuilder b = new StringBuilder(START).append("system\n").append(SYSTEM);
+        if (!rules.isEmpty()) {
+            b.append("\nYour owner's rules and notes for you (follow them; if two disagree, the later one wins):");
+            for (String r : rules) b.append("\n- ").append(r);
+        }
+        return b.append("\nToday is ").append(today()).append('.').append(END).toString();
     }
 
-    static String prompt(String question, List<String[]> history, String note) { return prompt(question, history, note, null); }
+    /** The owner's standing rules and notes (kept by the app between days); Kaivra follows them in every answer. */
+    public synchronized void setRules(List<String> owned) {
+        rules.clear();
+        for (String r : owned) if (r != null && !r.trim().isEmpty() && rules.size() < MAX_RULES) rules.add(r.trim());
+        primedFor = "";   // the instructions changed: read them again
+    }
+
+    public synchronized List<String> rules() { return new ArrayList<>(rules); }
+
+    String prompt(String question, List<String[]> history, String note) { return prompt(question, history, note, null); }
 
     /**
      * Earlier answers are written exactly as they were produced, so the engine can carry on without re-reading. hint is
      * a short instruction added after the question (or null).
      */
-    static String prompt(String question, List<String[]> history, String note, String hint) {
+    String prompt(String question, List<String[]> history, String note, String hint) {
         List<String[]> hist = new ArrayList<>(history);
         StringBuilder b;
         while (true) {
@@ -165,7 +188,16 @@ public final class KaivraMind implements AutoCloseable {
     private static final Pattern SELF = Pattern.compile(
         "(?i)\\b(who|what) are you\\b|\\bwhat (all )?can you do\\b|\\bwhat do you do\\b|\\bhow can you help\\b|"
         + "\\byour (name|abilities|skills|powers|features|purpose|creator|owner)\\b|\\bwho (made|created|built|owns) you\\b|"
-        + "\\bhow are you\\b|\\babout (yourself|you)\\b|\\b(tum|aap) kaun ho\\b|\\bkya kar sakti\\b");
+        + "\\bhow are you\\b|\\babout (yourself|you)\\b|\\b(tum|aap) kaun ho\\b|\\bkya kar sakti\\b|"
+        + "\\b(capabilit|abilit|limitation)\\w*|\\b(change|upgrade|update|improve|teach|train|modify|program) (you|your)\\b|"
+        + "\\bwho am i\\b|\\bwhat(?:'s| is) my name\\b|\\bwhat do you remember\\b|\\bmy rules\\b");
+    private static final Pattern RULE = Pattern.compile(
+        "(?i)^\\s*(?:kaivra[,!]?\\s+)?(?:please\\s+)?(?:remember(?: that)?|from now on|always|never|call me|my name is|"
+        + "keep in mind(?: that)?|note that|don't ever|do not ever|yaad rakhna|aaj se)\\b.+");
+    private static final Pattern FORGET_ALL = Pattern.compile(
+        "(?i)^\\s*(?:kaivra[,!]?\\s+)?(?:please\\s+)?forget (?:everything|all|all of it|all the rules|all my rules|"
+        + "what i told you|everything i told you)\\b.*");
+    private static final Pattern FORGET = Pattern.compile("(?i)^\\s*(?:kaivra[,!]?\\s+)?(?:please\\s+)?forget\\s+(.+)$");
     private static final Pattern WEATHER = Pattern.compile("(?i)\\b(weather|temperature|forecast|rain|mausam)\\b");
     private static final Pattern GAVE_UP = Pattern.compile(
         "(?i)real[- ]time|my knowledge|knowledge cut|as of my|(don't|do not|cannot|can't) (have access|browse|access the internet|"
@@ -174,6 +206,8 @@ public final class KaivraMind implements AutoCloseable {
     /** "search", "think", "self" (about Kaivra itself) or "" (let the brain decide), from the words of the question. */
     static String route(String question) {
         String q = question.trim();
+        if (FORGET_ALL.matcher(q).matches() || FORGET.matcher(q).matches()) return "forget";
+        if (RULE.matcher(q).matches() && !q.endsWith("?")) return "rule";   // a question is not a rule
         if (CREATE.matcher(q).find()) return "";
         if (SELF.matcher(q).find() && !WORK_OUT.matcher(q).find() && !NUMBER_PROBLEM.matcher(q).find()) return "self";
         if (RECENT.matcher(q).find()) return "search";
@@ -205,7 +239,10 @@ public final class KaivraMind implements AutoCloseable {
         return "";
     }
 
-    static final String SELF_HINT = "This is about you, Kaivra. Answer it yourself from what you know about yourself.";
+    static final String SELF_HINT = "This is about you, Kaivra, or about me, your owner. Answer it yourself from what you "
+        + "know about yourself and me.";
+    static final String RULE_HINT = "This is a rule or note from me, your owner. It is saved and you will follow it from now "
+        + "on. Confirm it in one short sentence, following it already.";
     static final String THINK_HINT = "Work this out step by step in your thinking, then tell me the answer in one or two "
         + "sentences. Do not reply THINK or SEARCH.";
 
@@ -275,6 +312,35 @@ public final class KaivraMind implements AutoCloseable {
         String way = route(question);
         if (way.equals("search")) return searched(question, question, history, listener, sources);
         if (way.equals("think")) return thought(question, history, listener);
+        if (way.equals("rule")) {
+            // the owner sets a standing rule or note: keep it (the app saves it), then say so in a sentence
+            String r = question.trim().replaceFirst("(?i)^kaivra[,!]?\\s+", "");
+            if (r.length() > 300) r = r.substring(0, 300);
+            if (rules.size() >= MAX_RULES) rules.remove(0);
+            rules.add(r);
+            primedFor = "";
+            String raw = generate(prompt(question, history, null, RULE_HINT), 120, 0.5f, listener);
+            String text = dropSignal(clean(raw));
+            return new Answer(text.isEmpty() ? "Done. I will remember that." : text, "rule", sources);
+        }
+        if (way.equals("forget")) {
+            String text;
+            if (FORGET_ALL.matcher(question.trim()).matches()) {
+                rules.clear();
+                text = "Done. I have forgotten all your rules and notes.";
+            } else {
+                java.util.regex.Matcher m = FORGET.matcher(question.trim());
+                String what = m.matches() ? m.group(1) : "";
+                List<String> words = KaivraWeb.keywords(what.replaceAll("(?i)\\b(that|the|last|rule|note|about|thing)\\b", " "));
+                int before = rules.size();
+                if (words.isEmpty() && !rules.isEmpty()) rules.remove(rules.size() - 1);   // "forget that": the last one
+                else rules.removeIf(r -> { for (String w : words) if (r.toLowerCase().contains(w)) return true; return false; });
+                text = rules.size() < before ? "Done. I have forgotten that." : "I had nothing like that to forget.";
+            }
+            primedFor = "";
+            if (listener != null) listener.onText(text);
+            return new Answer(text, "rule", sources);
+        }
         if (way.equals("self")) {
             String raw = generate(prompt(question, history, fact, SELF_HINT), ANSWER_TOKENS, 0.6f, listener);
             return new Answer(dropSignal(clean(raw)), "direct", sources);
