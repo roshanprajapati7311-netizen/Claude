@@ -41,8 +41,9 @@ public class MindTest {
             total += s;
             asked++;
             System.out.printf("**Q:** %s%n%n**A** (%s, %.1f s, first words after %.1f s): %s%n%n", q, ans.how, s, first[0], ans.text);
+            if (ans.how.equals("search")) System.out.printf("- searched with: %s%n", KaivraWeb.lastVia.isEmpty() ? "nothing answered" : KaivraWeb.lastVia);
             for (KaivraWeb.Found f : ans.sources) System.out.printf("- source: %s, %s%n", f.title, f.url);
-            if (!ans.sources.isEmpty()) System.out.println();
+            if (!ans.sources.isEmpty() || ans.how.equals("search")) System.out.println();
             hist.add(new String[]{q, ans.text});
             if (hist.size() > 4) hist.remove(0);
         }

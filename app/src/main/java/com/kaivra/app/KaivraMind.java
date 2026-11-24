@@ -55,7 +55,7 @@ public final class KaivraMind implements AutoCloseable {
 
     static final int CONTEXT = 6144;
     static final int HISTORY_CHARS = 9000;    // about 2,500 tokens of earlier conversation at most
-    static final int NOTES_CHARS = 2400;      // what the web reader may hand over
+    static final int NOTES_CHARS = 3000;      // what the web reader may hand over
     static final int THINK_TOKENS = 512;      // longest step-by-step thinking before answering
     static final int ANSWER_TOKENS = 400;
 
@@ -76,8 +76,10 @@ public final class KaivraMind implements AutoCloseable {
         + "Examples: for 'what is the weather in Delhi today' reply SEARCH: Delhi weather today. For 'if a train goes "
         + "60 km an hour, how long does it take to go 150 km' reply THINK. For 'hello' answer directly.\n"
         + "When notes from your knowledge library or the internet are given, rely on them and never invent facts. "
-        + "Phone actions such as calls, messages, opening apps, the torch and the volume are done by your command system "
-        + "when the owner asks for them directly, for example: call Rahul, or open the camera.";
+        + "What you can do: answer questions, look things up on the internet, work through maths, code and plans, write and "
+        + "create, and through your command system call and text contacts, open apps, turn the torch on and off, change "
+        + "the volume, take screenshots and lock the phone. Phone actions are done by your command system when the owner "
+        + "asks for them directly, for example: call Rahul, or open the camera.";
 
     private long handle;
     private final String info;
@@ -109,8 +111,13 @@ public final class KaivraMind implements AutoCloseable {
         return START + "system\n" + SYSTEM + " Today is " + today() + "." + END;
     }
 
-    /** Earlier answers are written exactly as they were produced, so the engine can carry on without re-reading. */
-    static String prompt(String question, List<String[]> history, String note) {
+    static String prompt(String question, List<String[]> history, String note) { return prompt(question, history, note, null); }
+
+    /**
+     * Earlier answers are written exactly as they were produced, so the engine can carry on without re-reading. hint is
+     * a short instruction added after the question (or null).
+     */
+    static String prompt(String question, List<String[]> history, String note, String hint) {
         List<String[]> hist = new ArrayList<>(history);
         StringBuilder b;
         while (true) {
@@ -121,6 +128,7 @@ public final class KaivraMind implements AutoCloseable {
         }
         String q = question.trim();
         if (note != null && !note.trim().isEmpty()) q = q + "\n\n(Note from your knowledge library: " + note.trim() + ")";
+        if (hint != null) q = q + "\n\n(" + hint + ")";
         b.append(START).append("user\n").append(q).append(END).append(REPLY);
         return b.toString();
     }
@@ -151,22 +159,51 @@ public final class KaivraMind implements AutoCloseable {
     private static final Pattern NUMBER_PROBLEM = Pattern.compile(
         "(?i)(?=.*[0-9])(?=.*\\b(how (much|many|long|far|old)|total|altogether|per|each|every|average|percent|interest|"
         + "profit|loss|speed|distance|times|divided|multiply|sum|difference|remaining|left over)\\b|.*%)");
+    private static final Pattern SELF = Pattern.compile(
+        "(?i)\\b(who|what) are you\\b|\\bwhat (all )?can you do\\b|\\bwhat do you do\\b|\\bhow can you help\\b|"
+        + "\\byour (name|abilities|skills|powers|features|purpose|creator|owner)\\b|\\bwho (made|created|built|owns) you\\b|"
+        + "\\bhow are you\\b|\\babout (yourself|you)\\b|\\b(tum|aap) kaun ho\\b|\\bkya kar sakti\\b");
+    private static final Pattern WEATHER = Pattern.compile("(?i)\\b(weather|temperature|forecast|rain|mausam)\\b");
     private static final Pattern GAVE_UP = Pattern.compile(
         "(?i)real[- ]time|my knowledge|knowledge cut|as of my|(don't|do not|cannot|can't) (have access|browse|access the internet|"
         + "check)|(recommend|suggest) (you )?(search|check)|latest information|up-to-date information|not able to provide (current|live)");
 
-    /** "search", "think" or "" (let the brain decide), from the words of the question. */
+    /** "search", "think", "self" (about Kaivra itself) or "" (let the brain decide), from the words of the question. */
     static String route(String question) {
         String q = question.trim();
         if (CREATE.matcher(q).find()) return "";
+        if (SELF.matcher(q).find() && !WORK_OUT.matcher(q).find() && !NUMBER_PROBLEM.matcher(q).find()) return "self";
         if (RECENT.matcher(q).find()) return "search";
         if (WORK_OUT.matcher(q).find() || NUMBER_PROBLEM.matcher(q).find()) return "think";
         return "";
     }
 
     private static boolean isSignal(String text) {
-        return text.trim().toUpperCase(Locale.ROOT).matches("^(THINK|SEARCH)\\b.*");
+        // as the model writes them: THINK alone on its line, or SEARCH: and a query (not "Search engines are ...")
+        return text.trim().matches("(?s)^(THINK[.!]?[ \\t]*(\\n.*)?|SEARCH[ \\t]*:.*)");
     }
+
+    /** An answer that starts with a leftover THINK or SEARCH line loses that line. */
+    static String dropSignal(String text) {
+        String t = text.trim();
+        if (!isSignal(t)) return t;
+        int nl = t.indexOf('\n');
+        return nl < 0 ? "" : t.substring(nl + 1).trim();
+    }
+
+    /** The last statement of the thinking (its conclusion), for when the model will not say the answer itself. */
+    static String conclusion(String thinking) {
+        String t = thinking.replace("<think>", "").replace("</think>", "").trim();
+        String[] parts = t.split("(?<=[.!])\\s+");
+        for (int i = parts.length - 1; i >= 0; i--) {
+            String p = parts[i].trim();
+            if (p.length() > 8 && !p.endsWith("?") && !p.matches("(?i)^(wait|hmm|let me|okay|ok|so let's).*")) return p;
+        }
+        return "";
+    }
+
+    static final String SELF_HINT = "This is about you, Kaivra. Answer it yourself from what you know about yourself.";
+    static final String THINK_HINT = "Work this out step by step now, then give me the final answer. Do not reply THINK or SEARCH.";
 
     // ---------------- generating ----------------
 
@@ -234,6 +271,10 @@ public final class KaivraMind implements AutoCloseable {
         String way = route(question);
         if (way.equals("search")) return searched(question, question, history, listener, sources);
         if (way.equals("think")) return thought(question, history, listener);
+        if (way.equals("self")) {
+            String raw = generate(prompt(question, history, fact, SELF_HINT), ANSWER_TOKENS, 0.6f, listener);
+            return new Answer(dropSignal(clean(raw)), "direct", sources);
+        }
         if (fact != null && !fact.trim().isEmpty()) {
             String raw = generate(prompt(question, history, fact), ANSWER_TOKENS, 0.6f, listener);
             return new Answer(clean(raw), "library", sources);
@@ -261,7 +302,9 @@ public final class KaivraMind implements AutoCloseable {
     /** Searches the web for query, then answers the question from what was found. */
     private Answer searched(String question, String query, List<String[]> history, Listener listener, List<KaivraWeb.Found> sources) {
         String q = query.replaceAll("(?i)\\b(kaivra|please|can you|could you|tell me|do you know)\\b", " ").replaceAll("\\s+", " ").trim();
-        String notes = KaivraWeb.notes(q.isEmpty() ? question : q, NOTES_CHARS, sources);
+        // anything recent (except the weather) also gets the newest news on it, with dates
+        boolean recent = (RECENT.matcher(question).find() || RECENT.matcher(query).find()) && !WEATHER.matcher(question).find();
+        String notes = KaivraWeb.notes(q.isEmpty() ? question : q, NOTES_CHARS, sources, recent);
         if (notes.isEmpty()) {
             notes = "Nothing could be found online just now (the phone may be offline). Answer from what you know, and say "
                 + "clearly that you could not check it online.";
@@ -269,26 +312,33 @@ public final class KaivraMind implements AutoCloseable {
         String p = prompt(question, history, null);
         p = p.substring(0, p.length() - REPLY.length())   // the question, then the notes as Kaivra's own lookup
             + REPLY + "SEARCH: " + q + END + START + "user\n<tool_response>\n" + notes + "\n</tool_response>\n"
-            + "Answer my question from these notes, briefly. If they do not answer it, say so." + END + REPLY;
+            + "Answer my question from these notes in one to three sentences, as if you looked it up yourself, without "
+            + "mentioning the notes. Prefer the newest information. If they do not answer it, say you could not find it."
+            + END + REPLY;
         String raw = generate(p, ANSWER_TOKENS, 0.5f, listener);
-        return new Answer(clean(raw), "search", sources);
+        return new Answer(dropSignal(clean(raw)), "search", sources);
     }
 
     /** Thinks step by step (not spoken), then says the answer. */
     private Answer thought(String question, List<String[]> history, Listener listener) {
-        String p = prompt(question, history, null);
+        String p = prompt(question, history, null, THINK_HINT);
         p = p.substring(0, p.length() - REPLY.length()) + START + "assistant\n<think>\n";
         String thinking = generate(p, THINK_TOKENS, 0.7f, null);
         int close = thinking.indexOf("</think>");
-        String spoken = close >= 0 ? thinking.substring(close + 8) : "";
-        if (clean(spoken).isEmpty() || isSignal(clean(spoken))) {
+        String spoken = close >= 0 ? dropSignal(clean(thinking.substring(close + 8))) : "";
+        if (spoken.isEmpty()) {
             // thought for long enough (or stopped right after thinking): now say the answer
             String done = close >= 0 ? thinking.substring(0, close + 8) + "\n\n" : thinking + "\n</think>\n\n";
-            spoken = generate(p + done, ANSWER_TOKENS, 0.5f, listener);
+            spoken = dropSignal(clean(generate(p + done, ANSWER_TOKENS, 0.5f, listener)));
+            if (spoken.isEmpty()) {
+                // it still would not say it: its own conclusion is the answer
+                spoken = conclusion(close >= 0 ? thinking.substring(0, close) : thinking);
+                if (listener != null && !spoken.isEmpty()) listener.onText(spoken);
+            }
         } else if (listener != null) {
             listener.onText(spoken);
         }
-        return new Answer(clean(spoken), "think", new ArrayList<>());
+        return new Answer(spoken, "think", new ArrayList<>());
     }
 
     /** Forgets the conversation held in the engine's memory. */

@@ -114,30 +114,125 @@ public final class KaivraWeb {
 
     private static final Pattern DDG_RESULT = Pattern.compile(
         "(?s)class=\"result__a\"[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>.*?class=\"result__snippet\"[^>]*>(.*?)</a>");
+    private static final Pattern LITE_RESULT = Pattern.compile(
+        "(?s)<a\\b([^>]*class=['\"]result-link['\"][^>]*)>(.*?)</a>.*?class=['\"]result-snippet['\"][^>]*>(.*?)</td>");
+    private static final Pattern HREF = Pattern.compile("href=['\"]([^'\"]+)['\"]");
+    private static final Pattern ITEM = Pattern.compile("(?s)<item\\b[^>]*>(.*?)</item>");
+    private static final Pattern DAY = Pattern.compile("\\b(\\d{1,2} [A-Z][a-z]{2} \\d{4})\\b");
 
-    /** The open web (DuckDuckGo's plain HTML page): title, address and the snippet of each result. */
-    public static List<Found> searchWeb(String query, int max) {
+    /** Which search services answered the last notes() call (for GitHub's tests). */
+    public static volatile String lastVia = "";
+
+    /** The real address behind a search service's redirect link. */
+    static String target(String href, String param) {
+        href = unescape(href);
+        int u = href.indexOf(param + "=");
+        if (u >= 0) {
+            String t = href.substring(u + param.length() + 1);
+            int amp = t.indexOf('&');
+            if (amp >= 0) t = t.substring(0, amp);
+            try { href = URLDecoder.decode(t, "UTF-8"); } catch (Exception e) { /* keep it as it is */ }
+        }
+        if (href.startsWith("//")) href = "https:" + href;
+        return href;
+    }
+
+    private static List<Found> duckDuckGo(String query, int max) throws IOException {
         List<Found> out = new ArrayList<>();
-        try {
-            String html = get("https://html.duckduckgo.com/html/?q=" + enc(query), 600_000);
-            Matcher m = DDG_RESULT.matcher(html);
-            while (m.find() && out.size() < max) {
-                String href = unescape(m.group(1));
-                int u = href.indexOf("uddg=");
-                if (u >= 0) {
-                    String target = href.substring(u + 5);
-                    int amp = target.indexOf('&');
-                    if (amp >= 0) target = target.substring(0, amp);
-                    href = URLDecoder.decode(target, "UTF-8");
-                }
-                if (href.startsWith("//")) href = "https:" + href;
-                if (href.contains("duckduckgo.com/y.js")) continue; // adverts
-                out.add(new Found(plain(m.group(2)), href, plain(m.group(3))));
-            }
-        } catch (Exception e) {
-            // no web results: Wikipedia may still answer
+        Matcher m = DDG_RESULT.matcher(get("https://html.duckduckgo.com/html/?q=" + enc(query), 600_000));
+        while (m.find() && out.size() < max) {
+            String href = target(m.group(1), "uddg");
+            if (href.contains("duckduckgo.com/y.js")) continue; // adverts
+            out.add(new Found(plain(m.group(2)), href, plain(m.group(3))));
         }
         return out;
+    }
+
+    private static List<Found> duckDuckGoLite(String query, int max) throws IOException {
+        List<Found> out = new ArrayList<>();
+        Matcher m = LITE_RESULT.matcher(get("https://lite.duckduckgo.com/lite/?q=" + enc(query), 600_000));
+        while (m.find() && out.size() < max) {
+            Matcher h = HREF.matcher(m.group(1));
+            if (!h.find()) continue;
+            String href = target(h.group(1), "uddg");
+            if (href.contains("duckduckgo.com/y.js")) continue;
+            out.add(new Found(plain(m.group(2)), href, plain(m.group(3))));
+        }
+        return out;
+    }
+
+    /** One field of an RSS item, as plain text. */
+    static String rss(String item, String tag) {
+        Matcher m = Pattern.compile("(?s)<" + tag + "\\b[^>]*>(.*?)</" + tag + ">").matcher(item);
+        if (!m.find()) return "";
+        String v = m.group(1).trim();
+        if (v.startsWith("<![CDATA[")) v = v.substring(9, v.endsWith("]]>") ? v.length() - 3 : v.length());
+        // the text may be HTML written inside the XML, sometimes escaped twice
+        return TAG.matcher(plain(unescape(v))).replaceAll(" ").replaceAll("\\s+", " ").trim();
+    }
+
+    /** Results from an RSS feed (Bing's web and news searches, Google News): title, address, date and text. */
+    private static List<Found> feed(String url, int max, boolean dated) throws IOException {
+        List<Found> out = new ArrayList<>();
+        Matcher m = ITEM.matcher(get(url, 600_000));
+        while (m.find() && out.size() < max) {
+            String it = m.group(1);
+            String title = rss(it, "title");
+            if (title.isEmpty()) continue;
+            String text = rss(it, "description");
+            String head = title.length() > 20 ? title.substring(0, 20) : title;
+            if (text.startsWith(head)) text = "";   // Google News only repeats the headline and the paper's name
+            if (dated) {
+                Matcher d = DAY.matcher(rss(it, "pubDate"));
+                if (d.find()) text = d.group(1) + (text.isEmpty() ? "" : ". " + text);
+            }
+            out.add(new Found(title, target(rss(it, "link"), "url"), text.length() > 300 ? text.substring(0, 300) : text));
+        }
+        return out;
+    }
+
+    /**
+     * The open web: title, address and snippet of each result. Tries DuckDuckGo, its light page, then Bing, because a
+     * search service sometimes stops answering for a while. via collects the name of the one that answered.
+     */
+    public static List<Found> searchWeb(String query, int max, List<String> via) {
+        String[] names = {"DuckDuckGo", "DuckDuckGo Lite", "Bing"};
+        for (int i = 0; i < names.length; i++) {
+            try {
+                List<Found> r = i == 0 ? duckDuckGo(query, max) : i == 1 ? duckDuckGoLite(query, max)
+                    : feed("https://www.bing.com/search?format=rss&mkt=en-IN&q=" + enc(query), max, false);
+                if (!r.isEmpty()) { via.add(names[i]); return r; }
+            } catch (Exception e) {
+                // this one did not answer: try the next
+            }
+        }
+        return new ArrayList<>();
+    }
+
+    public static List<Found> searchWeb(String query, int max) { return searchWeb(query, max, new ArrayList<>()); }
+
+    private static final Pattern NEWS_FILLER = Pattern.compile(
+        "(?i)\\b(what|what's|whats|is|are|was|were|the|a|an|any|latest|newest|recent|news|headlines?|updates?|about|on|"
+        + "regarding|this|week|today|today's|tonight|right|now|tell|me|give|show|please|kaivra|happening|happened|going|"
+        + "there|in the world|aaj|ki|ka|ke|khabar|taza)\\b|[?!.,]");
+
+    /** Recent news with dates (Bing News, then Google News); with no topic, today's top stories. */
+    public static List<Found> searchNews(String query, int max, List<String> via) {
+        String topic = NEWS_FILLER.matcher(query).replaceAll(" ").replaceAll("\\s+", " ").trim();
+        String[] names = {"Bing News", "Google News"};
+        for (int i = 0; i < names.length; i++) {
+            try {
+                String url = i == 0
+                    ? "https://www.bing.com/news/search?format=rss&mkt=en-IN&q=" + enc(topic.isEmpty() ? "top stories" : topic)
+                    : topic.isEmpty() ? "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"
+                    : "https://news.google.com/rss/search?hl=en-IN&gl=IN&ceid=IN:en&q=" + enc(topic);
+                List<Found> r = feed(url, max, true);
+                if (!r.isEmpty()) { via.add(names[i]); return r; }
+            } catch (Exception e) {
+                // try the next
+            }
+        }
+        return new ArrayList<>();
     }
 
     /** Wikipedia: the opening of the best-matching article(s). */
@@ -185,9 +280,19 @@ public final class KaivraWeb {
      * Everything Kaivra needs to answer a question it could not answer alone: web snippets, the best page's text and
      * Wikipedia's article, as short notes (about maxChars long). The list collects the sources used.
      */
-    public static String notes(String query, int maxChars, List<Found> sources) {
+    public static String notes(String query, int maxChars, List<Found> sources) { return notes(query, maxChars, sources, false); }
+
+    /** With recent, the newest news on the subject comes first, each with its date. */
+    public static String notes(String query, int maxChars, List<Found> sources, boolean recent) {
         StringBuilder b = new StringBuilder();
-        List<Found> web = searchWeb(query, 5);
+        List<String> via = new ArrayList<>();
+        if (recent) {
+            for (Found f : searchNews(query, 4, via)) {
+                b.append("- News: ").append(f.title).append(f.text.isEmpty() ? "" : " (" + f.text + ")").append('\n');
+                sources.add(f);
+            }
+        }
+        List<Found> web = searchWeb(query, 5, via);
         for (Found f : web) {
             if (f.text.isEmpty()) continue;
             b.append("- ").append(f.title).append(": ").append(f.text).append('\n');
@@ -207,8 +312,10 @@ public final class KaivraWeb {
             for (Found w : searchWikipedia(query, 1)) {
                 b.append("Wikipedia, ").append(w.title).append(": ").append(w.text.replace('\n', ' ')).append('\n');
                 sources.add(w);
+                via.add("Wikipedia");
             }
         }
+        lastVia = String.join(", ", via);
         String s = b.toString().trim();
         return s.length() > maxChars ? s.substring(0, maxChars) : s;
     }
